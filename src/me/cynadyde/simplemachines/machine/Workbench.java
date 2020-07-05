@@ -21,7 +21,7 @@ public class Workbench {
         this.dropper = dropper;
     }
 
-    public Block getLocation() {
+    public Block getPos() {
         return table;
     }
 

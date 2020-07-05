@@ -13,7 +13,6 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryMoveItemEvent;
-import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.inventory.PrepareItemCraftEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.CraftingInventory;
@@ -22,16 +21,13 @@ import org.bukkit.inventory.InventoryView;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class SimpleMachinesPlugin extends JavaPlugin implements Listener {
 
     // use set of crafting inv if players cant share it
-    private Map<Block, CraftingInventory> openedWorkbenches = new HashMap<>();
-    private Map<CraftingInventory, Block> openedWorkbenchGrids = new HashMap<>();
+    private Map<Block, Set<CraftingInventory>> openedWorkbenches = new HashMap<>();
+    private Map<CraftingInventory, Block> openedWorkbenchInvs = new HashMap<>();
 
     @Override
     public void onEnable() {
@@ -49,22 +45,19 @@ public class SimpleMachinesPlugin extends JavaPlugin implements Listener {
             // that block is part of a multi-block machine structure
             Workbench workbench = getWorkbench(event.getClickedBlock());
             if (workbench != null) {
+
+                // cancel the event and open a crafting grid manually to keep track of it
                 event.setUseInteractedBlock(Event.Result.DENY);
 
-                CraftingInventory openedInv = openedWorkbenches.get(workbench.getLocation());
-                if (openedInv == null) {
-                    // openedInv = (CraftingInventory) getServer().createInventory(null, InventoryType.WORKBENCH, "Workbench");
-                    InventoryView view = event.getPlayer().openWorkbench(workbench.getLocation().getLocation(), true);
-                    if (view != null) {
+                InventoryView view = event.getPlayer().openWorkbench(workbench.getPos().getLocation(), true);
+                if (view != null) {
+                    CraftingInventory openedInv = (CraftingInventory) view.getTopInventory();
 
-                        openedInv = (CraftingInventory) view.getTopInventory();
-                        openedWorkbenches.put(workbench.getLocation(), openedInv);
-                        openedWorkbenchGrids.put(openedInv, workbench.getLocation());
-                    }
-                }
-                else {
-                    // TODO i dont think the crafting inv is functional when opened like this
-                    event.getPlayer().openInventory(openedInv);
+                    Set<CraftingInventory> openedInvs = openedWorkbenches.computeIfAbsent(
+                            workbench.getPos(), k -> new HashSet<>());
+                    openedInvs.add(openedInv);
+
+                    openedWorkbenchInvs.put(openedInv, workbench.getPos());
                 }
             }
         }
@@ -74,7 +67,7 @@ public class SimpleMachinesPlugin extends JavaPlugin implements Listener {
     public void onPrepareItemCraft(PrepareItemCraftEvent event) {
 
         CraftingInventory inv = event.getInventory();
-        Block pos = openedWorkbenchGrids.get(inv);
+        Block pos = openedWorkbenchInvs.get(inv);
         if (pos != null) {
 
             boolean updated = false;
@@ -85,11 +78,11 @@ public class SimpleMachinesPlugin extends JavaPlugin implements Listener {
                 for (int i = 0; i < 9; i++) {
                     workbench.getDropper().getInventory().setItem(i, matrix[i]);
                 }
-                updated = workbench.getDropper().update(false);
+                updated = workbench.getDropper().update(false, false);
             }
             if (!updated) {
                 openedWorkbenches.remove(pos);
-                openedWorkbenchGrids.remove(inv);
+                openedWorkbenchInvs.remove(inv);
             }
         }
     }
@@ -109,7 +102,7 @@ public class SimpleMachinesPlugin extends JavaPlugin implements Listener {
             viewers.remove(event.getPlayer());
             if (viewers.isEmpty()) {
                 openedWorkbenches.values().remove(inv);
-                openedWorkbenchGrids.remove(inv);
+                openedWorkbenchInvs.remove(inv);
             }
         }
     }
