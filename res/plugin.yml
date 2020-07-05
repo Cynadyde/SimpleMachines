@@ -1,0 +1,9 @@
+main: me.cynadyde.simplemachines.SimpleMachinesPlugin
+name: SimpleMachines
+version: 1.0.0
+api-version: "1.16"
+authors:
+  - Cynadyde
+description: >
+  Adds several multi-block machines to the game to make
+  life easier for the industrious miner and crafter!
