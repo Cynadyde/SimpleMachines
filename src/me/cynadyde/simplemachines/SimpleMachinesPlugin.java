@@ -14,6 +14,7 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class SimpleMachinesPlugin extends JavaPlugin implements Listener {
 
@@ -111,6 +112,7 @@ public class SimpleMachinesPlugin extends JavaPlugin implements Listener {
             return null;
         }
         Iterator<Recipe> recipes = getServer().recipeIterator();
+        int searched = 0;
 
         recipeSearch:
         while (recipes.hasNext()) {
@@ -118,17 +120,20 @@ public class SimpleMachinesPlugin extends JavaPlugin implements Listener {
 
 
             if (recipe instanceof ShapelessRecipe) {
-                System.out.println("testing recipe: " + ((ShapelessRecipe) recipe).getKey());
+                searched += 1;
+                if (recipe.getResult().getType() == Material.STICK) {
+                    System.out.println("testing recipe: (" + searched + ") " + ((ShapelessRecipe) recipe).getKey());
+                }
 
                 List<ItemStack> unmatched = new ArrayList<>(Arrays.asList(ingredients));
 
-                recipeTest:
+                testRecipe:
                 for (RecipeChoice choice : ((ShapelessRecipe) recipe).getChoiceList()) {
                     for (int i = 0; i < unmatched.size(); i++) {
                         ItemStack match = unmatched.get(i);
                         if (match != null && choice.test(match)) {
                             unmatched.remove(i);
-                            continue recipeTest;
+                            continue testRecipe;
                         }
                     }
                     continue recipeSearch;
@@ -138,63 +143,48 @@ public class SimpleMachinesPlugin extends JavaPlugin implements Listener {
                 }
             }
             else if (recipe instanceof ShapedRecipe) {
-                System.out.println("testing recipe: " + ((ShapedRecipe) recipe).getKey());
+                searched += 1;
+                boolean verbose = false;
+                if (recipe.getResult().getType() == Material.STICK) {
+                    System.out.println("testing recipe: (" + searched + ") " + ((ShapedRecipe) recipe).getKey());
+                    verbose = true;
 
+//                    System.out.println(Arrays.toString(((ShapedRecipe) recipe).getShape()));
+//                    System.out.println("{" + ((ShapedRecipe) recipe).getChoiceMap().entrySet().stream().map(e -> e.getKey().toString() + e.getValue().toString()).collect(Collectors.joining(", ")) + "}");
+                }
                 Map<Character, RecipeChoice> choiceMap = ((ShapedRecipe) recipe).getChoiceMap();
                 String[] shape = ((ShapedRecipe) recipe).getShape();
                 int rows = shape.length;
-                int cols = Arrays.stream(shape).map(String::length).max(Integer::compareTo).orElse(0);
-                if (rows > 0 && cols > 0) {
+                int cols = shape[0].length();
 
-                    RecipeChoice first = choiceMap.get(shape[0].charAt(0));
-                    boolean foundFirst = false;
-                    int top = 0;
-                    int left = 0;
+                // since the recipe shape can be smaller than the 3x3 grid, exhaust the possible sub grids in testing
+                for (int top = 0; top <= 3 - rows; top++) {
 
-                    findFirst:
-                    for (; top <= 3 - rows; top++) {
-                        for (; left <= 3 - cols; left++) {
-                            ItemStack ingredient = ingredients[top * 3 + left];
-                            if (ingredient != null) {
-                                if (first.test(ingredient)) {
-                                    foundFirst = true;
-                                    break findFirst;
-                                }
-                            }
-                        }
-                    }
-                    if (!foundFirst) {
-                        continue;
-                    }
-                    System.out.println(" ****** found the first on this recipe!!");
-                    System.out.println("           item: " + ingredients[top * 3 + left]);
+                    testRecipeSubGrid:
+                    for (int left = 0; left <= 3 - cols; left++) {
 
-                    boolean skip = true;
-                    for (int row = top; row < rows; row++) {
-                        for (int col = left; col < cols; col++) {
+                        for (int r = 0; r < rows; r++) {
+                            int row = top + r;
+                            for (int c = 0; c < cols; c++) {
+                                int col = left + c;
 
-                            // skip the top left item because we already tested it
-                            if (skip) {
-                                skip = false;
-                                continue;
-                            }
-                            String shapeRow = shape[row];
-                            if (shapeRow.length() > col) {
-                                RecipeChoice choice = choiceMap.get(shape[row].charAt(col));
+                                RecipeChoice choice = choiceMap.get(shape[r].charAt(c));
                                 if (choice != null) {
-
                                     ItemStack ingredient = ingredients[row * 3 + col];
                                     if (ingredient == null || !choice.test(ingredient)) {
-                                        continue recipeSearch;
+                                        continue testRecipeSubGrid;
                                     }
                                 }
                             }
                         }
+                        return recipe.getResult();
                     }
                 }
-                return recipe.getResult();
             }
         }
+
+        System.out.println("tested " + searched + " recipes...");
+
         return null;
     }
 }
