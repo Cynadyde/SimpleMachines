@@ -1,5 +1,6 @@
 package me.cynadyde.simplemachines;
 
+import org.apache.commons.lang.ArrayUtils;
 import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
@@ -14,7 +15,6 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 public class SimpleMachinesPlugin extends JavaPlugin implements Listener {
 
@@ -43,8 +43,9 @@ public class SimpleMachinesPlugin extends JavaPlugin implements Listener {
     public void handleAutoCraft(Block block) {
         if (isAutoCraftMachine(block)) {
 
-            ItemStack[] ingredients = ((Dispenser) block.getState()).getInventory().getContents();
-            filterOutAir(ingredients);
+            Dispenser dispenser = ((Dispenser) block.getState());
+            ItemStack[] contents = dispenser.getInventory().getContents();
+            ItemStack[] ingredients = airFilteredOut(contents);
 
             if (moreThanOneOfEach(ingredients)) {
                 System.out.println("got ingredients: " + Arrays.asList(ingredients));
@@ -52,6 +53,13 @@ public class SimpleMachinesPlugin extends JavaPlugin implements Listener {
                 ItemStack result = crafted(ingredients);
                 if (result != null) {
 
+                    int amount = findLeastCommonAmount(ingredients) - 1; // keep 1 of each in the auto-crafter
+                    // make sure new result amount isn't greater than the max stack size
+                    int overflow = Math.max(0, (result.getAmount() * amount) - result.getMaxStackSize());
+                    if (overflow > 0) {
+                        amount -= Math.ceil(overflow / (double) result.getAmount());
+                    }
+                    result.setAmount(result.getAmount() * amount);
                     System.out.println("got a result! " + result);
 
                     List<ItemStack> spill = new ArrayList<>();
@@ -70,29 +78,38 @@ public class SimpleMachinesPlugin extends JavaPlugin implements Listener {
                     }
                     if (!spill.isEmpty()) {
                         for (ItemStack spilled : spill) {
-                            below.getWorld().dropItemNaturally(dest, spilled);
+                            below.getWorld().dropItem(dest, spilled);
                         }
-                        below.getWorld().spawnParticle(Particle.SMOKE_NORMAL, dest, 10, 0.02, 0.04, 0.02, 0.02 /*speed*/);
-                        below.getWorld().playSound(dest, Sound.BLOCK_DISPENSER_DISPENSE, SoundCategory.BLOCKS, 1.0f, 1.0f);
+//                        below.getWorld().spawnParticle(Particle.SMOKE_NORMAL, dest, 10, 0.02, 0.04, 0.02, 0.02 /*speed*/);
+//                        below.getWorld().playSound(dest, Sound.BLOCK_DISPENSER_DISPENSE, SoundCategory.BLOCKS, 1.0f, 1.0f);
                     }
+
+                    ingredients = dispenser.getInventory().getContents();
+                    removeAmountFromEachNonAir(ingredients, amount);
+//                    dispenser.getInventory().setContents();
                 }
             }
         }
     }
 
-    public void filterOutAir(ItemStack[] items) {
+    public ItemStack[] airFilteredOut(ItemStack[] items) {
+        ItemStack[] result = new ItemStack[items.length];
         for (int i = 0; i < items.length; i++) {
             ItemStack item = items[i];
-            if (item != null) {
-                ItemMeta meta = item.getItemMeta();
-                if (meta != null && meta.hasDisplayName()) {
-                    String name = ChatColor.stripColor(meta.getDisplayName().trim()).toLowerCase();
-                    if (name.equals("minecraft:air") || name.equals("air")) {
-                        items[i] = null;
-                    }
-                }
+            result[i] = isAirFilter(item) ? null : item;
+        }
+        return result;
+    }
+
+    public boolean isAirFilter(ItemStack item) {
+        if (item != null) {
+            ItemMeta meta = item.getItemMeta();
+            if (meta != null && meta.hasDisplayName()) {
+                String name = ChatColor.stripColor(meta.getDisplayName().trim()).toLowerCase();
+                return name.equals("minecraft:air") || name.equals("air");
             }
         }
+        return false;
     }
 
     public boolean moreThanOneOfEach(ItemStack[] items) {
@@ -104,6 +121,26 @@ public class SimpleMachinesPlugin extends JavaPlugin implements Listener {
         return true;
     }
 
+    public int findLeastCommonAmount(ItemStack[] items) {
+        int result = Integer.MAX_VALUE;
+        for (ItemStack item : items) {
+            if (item != null) {
+                if (item.getAmount() < result) {
+                    result = item.getAmount();
+                }
+            }
+        }
+        return result;
+    }
+
+    public void removeAmountFromEachNonAir(ItemStack[] items, int amount) {
+        for (ItemStack item : items) {
+            if (item != null && !isAirFilter(item)) {
+                item.setAmount(item.getAmount() - amount);
+            }
+        }
+    }
+
     public ItemStack crafted(ItemStack[] ingredients) {
         if (ingredients.length != 9) {
             throw new IllegalArgumentException("ingredients array must be of length 9");
@@ -112,19 +149,12 @@ public class SimpleMachinesPlugin extends JavaPlugin implements Listener {
             return null;
         }
         Iterator<Recipe> recipes = getServer().recipeIterator();
-        int searched = 0;
 
         recipeSearch:
         while (recipes.hasNext()) {
             Recipe recipe = recipes.next();
 
-
             if (recipe instanceof ShapelessRecipe) {
-                searched += 1;
-                if (recipe.getResult().getType() == Material.STICK) {
-                    System.out.println("testing recipe: (" + searched + ") " + ((ShapelessRecipe) recipe).getKey());
-                }
-
                 List<ItemStack> unmatched = new ArrayList<>(Arrays.asList(ingredients));
 
                 testRecipe:
@@ -143,21 +173,12 @@ public class SimpleMachinesPlugin extends JavaPlugin implements Listener {
                 }
             }
             else if (recipe instanceof ShapedRecipe) {
-                searched += 1;
-                boolean verbose = false;
-                if (recipe.getResult().getType() == Material.STICK) {
-                    System.out.println("testing recipe: (" + searched + ") " + ((ShapedRecipe) recipe).getKey());
-                    verbose = true;
-
-//                    System.out.println(Arrays.toString(((ShapedRecipe) recipe).getShape()));
-//                    System.out.println("{" + ((ShapedRecipe) recipe).getChoiceMap().entrySet().stream().map(e -> e.getKey().toString() + e.getValue().toString()).collect(Collectors.joining(", ")) + "}");
-                }
                 Map<Character, RecipeChoice> choiceMap = ((ShapedRecipe) recipe).getChoiceMap();
                 String[] shape = ((ShapedRecipe) recipe).getShape();
                 int rows = shape.length;
-                int cols = shape[0].length();
+                int cols = shape[0].length(); // recipe shapes are forced to be rectangular
 
-                // since the recipe shape can be smaller than the 3x3 grid, exhaust the possible sub grids in testing
+                // since the recipe shape can be smaller than the 3x3 grid, exhaust possible sub-grids in testing
                 for (int top = 0; top <= 3 - rows; top++) {
 
                     testRecipeSubGrid:
@@ -182,9 +203,6 @@ public class SimpleMachinesPlugin extends JavaPlugin implements Listener {
                 }
             }
         }
-
-        System.out.println("tested " + searched + " recipes...");
-
         return null;
     }
 }
