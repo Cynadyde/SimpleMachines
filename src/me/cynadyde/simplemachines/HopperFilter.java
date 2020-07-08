@@ -4,14 +4,12 @@ import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
-import org.bukkit.block.BlockState;
 import org.bukkit.block.Container;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryMoveItemEvent;
 import org.bukkit.event.inventory.InventoryPickupItemEvent;
-import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 
@@ -177,21 +175,19 @@ public class HopperFilter implements Listener {
     public void performTransfer(InventoryHolder source, InventoryHolder dest, int amount,
             ServePolicy serve, OutputPolicy output, RetrievePolicy retrieve, InputPolicy input) {
 
-        if (dest instanceof BlockState) {
-            dest = (InventoryHolder) ((BlockState) dest).getBlock().getState();
-        }
-
         InvSlot served = performItemOutput(source, amount, serve, output);
         if (served != null) {
 
-            ItemStack leftover = performItemInput(served.getItem(), dest, retrieve, input);
-            if (leftover != null && leftover.getAmount() > 0) {
+            ItemStack leftover = performItemInput(dest, served.getItem(), retrieve, input);
+            if (leftover != null) {
+
                 performItemRecall(new InvSlot(served.getSlot(), leftover), source);
             }
         }
     }
 
     public InvSlot performItemOutput(InventoryHolder source, int amount, ServePolicy serve, OutputPolicy output) {
+
         int size = source.getInventory().getSize();
         Iterator<Integer> slots = serve == ServePolicy.RANDOM
                 ? new RandomPermuteIterator(0, size)
@@ -217,107 +213,75 @@ public class HopperFilter implements Listener {
                     item = null;
                 }
                 source.getInventory().setItem(slot, item);
-
-                if (source instanceof Container) {
-                    if (((Container) source).update(false, false)) {
-                        return new InvSlot(slot, take);
-                    }
-                }
-                else {
-                    return new InvSlot(slot, take);
-                }
+                return new InvSlot(slot, take);
             }
         }
         return null;
     }
 
-    public ItemStack performItemInput(ItemStack served, InventoryHolder dest, RetrievePolicy retrieve, InputPolicy input) {
-
-        served = served.clone();
-
-        if (dest instanceof Container) {
-            System.out.println("isPlaced == " + ((Container) dest).isPlaced());
-            System.out.println("the block: " + ((Container) dest).getBlock());
-        }
-        else {
-            System.out.println("((not a container))");
-        }
+    public ItemStack performItemInput(InventoryHolder dest, ItemStack served, RetrievePolicy retrieve, InputPolicy input) {
 
         if (retrieve == RetrievePolicy.NORMAL && input == InputPolicy.NORMAL) {
-            System.out.println("USING DEFAULT WAY OF ADDING " + served + "!");
-            ItemStack leftover = dest.getInventory().addItem(served)/*returns leftovers*/.values().stream().findFirst().orElse(null);
-            if (dest instanceof Container) {
-                if (!((Container) dest).update(false, false)) {
-                    System.out.println("uh oh couldn't update container...");
-                    System.out.println("++++++++++++++");
-                    return served;
-                }
-                System.out.println("able to update container!");
-            }
-            System.out.println((leftover == null ? "NORHING" : leftover) + "WAS LEFT OVER!");
-            System.out.println("++++++++++++++++++");
-            return leftover;
+            // returns the count that didn't fit after adding to inventory
+            return dest.getInventory().addItem(served).values().stream().findFirst().orElse(null);
         }
+        int leftovers = served.getAmount();
 
         int size = dest.getInventory().getSize();
-        Iterator<Integer> slots = retrieve == RetrievePolicy.RANDOM
-                ? new RandomPermuteIterator(0, size)
-                : IntStream.range(0, size).iterator();
+        Iterator<Integer> slots;
 
-        int leftoverAmount = served.getAmount();
+        // try to complete existing stacks in the inventory...
+        if (leftovers > 0 && input != InputPolicy.MAX_ONE) {
 
-        while (slots.hasNext() && leftoverAmount > 0) {
-            int slot = slots.next();
-            if (retrieve == RetrievePolicy.REVERSED) {
-                slot = size - 1 - slot;
-            }
-            ItemStack current = dest.getInventory().getItem(slot);
-            if (current == null || current.getAmount() < 1) {
-                if (input != InputPolicy.LOCK_EMPTY) {
+            slots = retrieve == RetrievePolicy.RANDOM
+                    ? new RandomPermuteIterator(0, size)
+                    : IntStream.range(0, size).iterator();
 
-                    System.out.println("FOUND EMPTY SPACE FOR " + served + " AT SLOT " + slot + " WOOT");
-
-                    dest.getInventory().setItem(slot, served);
-                    leftoverAmount = 0;
+            while (slots.hasNext() && leftovers > 0) {
+                int slot = slots.next();
+                if (retrieve == RetrievePolicy.REVERSED) {
+                    slot = size - 1 - slot;
                 }
-            }
-            else if (served.isSimilar(current)) {
-                if (input != InputPolicy.MAX_ONE) {
+                ItemStack current = dest.getInventory().getItem(slot);
+                if (current != null && served.isSimilar(current)) {
 
                     int total = served.getAmount() + current.getAmount();
                     int overflow = Math.max(0, total - served.getMaxStackSize());
 
                     total -= overflow;
-                    leftoverAmount -= (total - current.getAmount());
+                    leftovers -= (total - current.getAmount());
 
-
-                    System.out.println("FOUND FREE SPACE FOR " + served + " AT SLOT " + slot + " WITH " + current + " (total " + total + ") WOOT (" + leftoverAmount + " left)");
                     current.setAmount(total);
-                    System.out.println("beep beep " + current);
                     dest.getInventory().setItem(slot, current);
                 }
             }
         }
+        // try to begin a new stack in the inventory...
+        if (leftovers > 0 && input != InputPolicy.LOCK_EMPTY) {
 
-        // if nothing was able to be changed, just return the input
-        if (dest instanceof Container) {
-            if (!((BlockState) dest).update(false, false)) {
-                System.out.println("uh oh couldn't update container...");
-                System.out.println("++++++++++++++");
-                return served;
+            slots = retrieve == RetrievePolicy.RANDOM
+                    ? new RandomPermuteIterator(0, size)
+                    : IntStream.range(0, size).iterator();
+
+            while (slots.hasNext() && leftovers > 0) {
+                int slot = slots.next();
+                if (retrieve == RetrievePolicy.REVERSED) {
+                    slot = size - 1 - slot;
+                }
+                ItemStack current = dest.getInventory().getItem(slot);
+                if (current == null || current.getAmount() < 1) {
+
+                    dest.getInventory().setItem(slot, served);
+                    leftovers = 0;
+                }
             }
-            System.out.println("able to update container!");
         }
-        if (leftoverAmount == 0) {
-            System.out.println("NOTHING LEFT OVER!");
-            System.out.println("++++++++++++++");
+        if (leftovers == 0) {
             return null;
         }
         else {
             ItemStack leftover = served.clone();
-            leftover.setAmount(leftoverAmount);
-            System.out.println("in total, " + leftoverAmount + " was left over...");
-            System.out.println("++++++++++++++");
+            leftover.setAmount(leftovers);
             return leftover;
         }
     }
@@ -327,11 +291,7 @@ public class HopperFilter implements Listener {
         System.out.println("RECALLING " + recall.getItem() + " TO SLOT " + recall.getSlot());
 
         source.getInventory().setItem(recall.getSlot(), recall.getItem());
-        if (source instanceof Container) {
-            boolean a = ((Container) source).update(false, false);
 
-            System.out.println(a ? "ABLE TO UPDATE CONTAINER!" : "unable to update container...");
-        }
         System.out.println("++++++++++++++");
     }
 }
