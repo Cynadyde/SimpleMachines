@@ -7,3 +7,6 @@ authors:
 description: >
   Adds several multi-block machines to the game to make
   life easier for the industrious miner and crafter!
+commands:
+  insertitem:
+    description: aaaaa

@@ -25,7 +25,7 @@ public class RandomPermuteIterator implements Iterator<Integer> {
     public RandomPermuteIterator(int start, int end, Random rng) {
         this.OFFSET = start;
         this.SIZE = end - start;
-        this.MODULUS = (int) Math.pow(2, Math.ceil(Math.log(SIZE) / Math.log(2)));
+        this.MODULUS = (int) Math.pow(2, Math.ceil(Math.log(SIZE) / Math.log(2))); // round size to next power of 2
         this.seed = rng.nextInt(SIZE);
         this.next = seed;
         this.ended = false;
@@ -38,6 +38,7 @@ public class RandomPermuteIterator implements Iterator<Integer> {
 
     @Override
     public Integer next() {
+        // i'm guessing we modulus a power of 2 instead of size for performance?
         do { next = (MULTIPLIER * next + INCREMENT) % MODULUS; }
         while (next >= SIZE);
         if (next == seed) {
