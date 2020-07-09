@@ -1,4 +1,4 @@
-package me.cynadyde.simplemachines;
+package me.cynadyde.simplemachines.util;
 
 import java.util.Iterator;
 import java.util.Random;

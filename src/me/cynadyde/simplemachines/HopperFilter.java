@@ -1,12 +1,14 @@
 package me.cynadyde.simplemachines;
 
+import me.cynadyde.simplemachines.util.InvSlotItem;
+import me.cynadyde.simplemachines.util.InvMovePair;
+import me.cynadyde.simplemachines.util.RandomPermuteIterator;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.BlockState;
 import org.bukkit.block.Container;
-import org.bukkit.entity.Entity;
 import org.bukkit.entity.Item;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -36,112 +38,8 @@ public class HopperFilter implements Listener {
     /** The rules when choosing a slot to have an item transferred out. */
     public enum OutputPolicy {NORMAL, MIN_ONE}
 
-    /**
-     * An item stack and the raw inventory slot number it was found at,
-     * enabling a recall on a transferred item to be done if needed.
-     */
-    public static class InvSlot {
-
-        private final int slot;
-        private final ItemStack item;
-
-        public InvSlot(int slot, ItemStack item) {
-            this.slot = slot;
-            this.item = item;
-        }
-
-        public int getSlot() {
-            return slot;
-        }
-
-        public ItemStack getItem() {
-            return item;
-        }
-    }
-
-    public static class InventoryMovePair {
-
-        private final InventoryHolder source;
-        private final InventoryHolder dest;
-
-        public InventoryMovePair(InventoryHolder source, InventoryHolder dest) {
-            this.source = source;
-            this.dest = dest;
-        }
-
-        public InventoryHolder getSource() {
-            return source;
-        }
-
-        public InventoryHolder getDest() {
-            return dest;
-        }
-
-        private boolean equalsSource(InventoryMovePair that) {
-            if (this.source.equals(that.source)) {
-                return true;
-            }
-            else if (this.source instanceof BlockState && that.source instanceof BlockState) {
-                if (((BlockState) this.source).isPlaced() && ((BlockState) that.source).isPlaced()) {
-                    return ((BlockState) this.source).getBlock().equals(((BlockState) that.source).getBlock());
-                }
-            }
-            else if (this.source instanceof Entity && that.source instanceof Entity) {
-                return ((Entity) this.source).getEntityId() == ((Entity) that.source).getEntityId();
-            }
-            return false;
-        }
-
-        private boolean equalsDest(InventoryMovePair that) {
-            if (this.dest.equals(that.dest)) {
-                return true;
-            }
-            else if (this.dest instanceof BlockState && that.dest instanceof BlockState) {
-                if (((BlockState) this.dest).isPlaced() && ((BlockState) that.dest).isPlaced()) {
-                    return ((BlockState) this.dest).getBlock().equals(((BlockState) that.dest).getBlock());
-                }
-            }
-            else if (this.dest instanceof Entity && that.dest instanceof Entity) {
-                return ((Entity) this.dest).getEntityId() == ((Entity) that.dest).getEntityId();
-            }
-            return false;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            InventoryMovePair that = (InventoryMovePair) o;
-            return this.equalsSource(that) && this.equalsDest(that);
-        }
-
-        @Override
-        public int hashCode() {
-            Object s, d;
-            if (source instanceof BlockState && ((BlockState) source).isPlaced()) {
-                s = ((BlockState) source).getBlock();
-            }
-            else if (source instanceof Entity) {
-                s = ((Entity) source).getEntityId();
-            }
-            else {
-                s = source;
-            }
-            if (dest instanceof BlockState && ((BlockState) dest).isPlaced()) {
-                d = ((BlockState) dest).getBlock();
-            }
-            else if (dest instanceof Entity) {
-                d = ((Entity) dest).getEntityId();
-            }
-            else {
-                d = dest;
-            }
-            return Objects.hash(s, d);
-        }
-    }
-
     private final SimpleMachinesPlugin plugin;
-    private final Map<InventoryMovePair, Integer> invMoveAttempts;
+    private final Map<InvMovePair, Integer> invMoveAttempts;
 
     public HopperFilter(SimpleMachinesPlugin plugin) {
         this.plugin = plugin;
@@ -200,7 +98,7 @@ public class HopperFilter implements Listener {
     @EventHandler(priority = EventPriority.LOWEST)
     public void onInventoryMoveItemFirst(InventoryMoveItemEvent event) {
 
-        InventoryMovePair movePair = new InventoryMovePair(
+        InvMovePair movePair = new InvMovePair(
                 event.getSource().getHolder(),
                 event.getDestination().getHolder());
 
@@ -282,7 +180,7 @@ public class HopperFilter implements Listener {
         }
         if (takeover) {
 
-            InventoryMovePair movePair = new InventoryMovePair(
+            InvMovePair movePair = new InvMovePair(
                     event.getSource().getHolder(),
                     event.getDestination().getHolder());
 
@@ -347,14 +245,14 @@ public class HopperFilter implements Listener {
                 }
 
                 source.getInventory().setItem(slot, item);
-                InvSlot served = new InvSlot(slot, take);
+                InvSlotItem served = new InvSlotItem(slot, take);
 
                 ItemStack leftover = performItemInput(dest, served.getItem(), retrieve, input);
                 if (leftover == null) {
                     break;
                 }
                 else {
-                    performItemRecall(new InvSlot(served.getSlot(), leftover), source);
+                    performItemRecall(new InvSlotItem(served.getSlot(), leftover), source);
                 }
                 if (isTargeted(source, dest)) {
                     System.out.println("++++++++++++++");
@@ -449,7 +347,7 @@ public class HopperFilter implements Listener {
         }
     }
 
-    public void performItemRecall(InvSlot recall, InventoryHolder source) {
+    public void performItemRecall(InvSlotItem recall, InventoryHolder source) {
 
         if (isTargeted(source)) {
             System.out.println("RECALLING " + recall.getItem() + " TO SLOT " + recall.getSlot());
