@@ -197,11 +197,8 @@ public class HopperFilter implements Listener {
 //        }
 //    }
 
-    @EventHandler(priority = EventPriority.MONITOR)
-    public void onInventoryMoveItem(InventoryMoveItemEvent event) {
-
-        if (event.isCancelled()) return;
-        boolean takeover = false;
+    @EventHandler(priority = EventPriority.LOWEST)
+    public void onInventoryMoveItemFirst(InventoryMoveItemEvent event) {
 
         InventoryMovePair movePair = new InventoryMovePair(
                 event.getSource().getHolder(),
@@ -212,12 +209,23 @@ public class HopperFilter implements Listener {
             if (remaining > 0) {
                 invMoveAttempts.put(movePair, remaining - 1);
                 event.setCancelled(true);
-                return;
             }
             else {
                 invMoveAttempts.remove(movePair);
             }
         }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onInventoryMoveItemLast(InventoryMoveItemEvent event) {
+
+        if (event.isCancelled()) return;
+        boolean takeover = false;
+
+        InventoryHolder source = event.getSource().getHolder();
+        InventoryHolder dest = event.getSource().getHolder();
+
+        if (source == null || dest == null) return;
 
         ServePolicy serve = ServePolicy.NORMAL;
         OutputPolicy output = OutputPolicy.NORMAL;
@@ -227,11 +235,11 @@ public class HopperFilter implements Listener {
         World world = null;
 
         if (event.getSource().getHolder() instanceof Container) {
-            Block source = ((Container) event.getSource().getHolder()).getBlock();
-            world = source.getWorld();
+            Block from = ((Container) event.getSource().getHolder()).getBlock();
+            world = from.getWorld();
 
             for (BlockFace face : FACES) {
-                switch (source.getRelative(face).getType()) {
+                switch (from.getRelative(face).getType()) {
                     case JUNGLE_TRAPDOOR:
                         serve = ServePolicy.REVERSED;
                         takeover = true;
@@ -248,11 +256,11 @@ public class HopperFilter implements Listener {
             }
         }
         if (event.getDestination().getHolder() instanceof Container) {
-            Block dest = ((Container) event.getDestination().getHolder()).getBlock();
-            world = dest.getWorld();
+            Block to = ((Container) event.getDestination().getHolder()).getBlock();
+            world = to.getWorld();
 
             for (BlockFace face : FACES) {
-                switch (dest.getRelative(face).getType()) {
+                switch (to.getRelative(face).getType()) {
                     case SPRUCE_TRAPDOOR:
                         input = InputPolicy.MAX_ONE;
                         takeover = true;
@@ -274,9 +282,13 @@ public class HopperFilter implements Listener {
         }
         if (takeover) {
 
+            InventoryMovePair movePair = new InventoryMovePair(
+                    event.getSource().getHolder(),
+                    event.getDestination().getHolder());
+
             invMoveAttempts.put(movePair,
                     Bukkit.spigot().getConfig().getInt("world-settings." + world.getName() + ".ticks-per.hopper-transfer",
-                            Bukkit.spigot().getConfig().getInt("world-settings.default.ticks-per.hopper-transfer", 8)) / 4);
+                            Bukkit.spigot().getConfig().getInt("world-settings.default.ticks-per.hopper-transfer", 8)) / 8 - 1);
 
             // item amount (set to spigot world config hopper take amount)
             int a = Bukkit.spigot().getConfig().getInt("world-settings." + world.getName() + ".hopper-amount",
@@ -300,36 +312,6 @@ public class HopperFilter implements Listener {
 
     public void performTransfer(InventoryHolder source, InventoryHolder dest, int amount,
             ServePolicy serve, OutputPolicy output, RetrievePolicy retrieve, InputPolicy input) {
-
-        InvSlot served = performItemOutput(source, amount, serve, output);
-        if (served != null) {
-
-            System.out.println("SERVE: " + serve);
-            System.out.println("OUTPUT: " + output);
-            System.out.println("RETRIEVE: " + retrieve);
-            System.out.println("INPUT: " + input);
-
-            ItemStack leftover = performItemInput(dest, served.getItem(), retrieve, input);
-            if (leftover != null) {
-
-                performItemRecall(new InvSlot(served.getSlot(), leftover), source);
-            }
-            System.out.println("++++++++++++++");
-        }
-    }
-
-    public void performTransfer(Item item, InventoryHolder dest, RetrievePolicy retrieve, InputPolicy input) {
-
-        ItemStack leftover = performItemInput(dest, item.getItemStack(), retrieve, input);
-        if (leftover == null) {
-            item.remove();
-        }
-        else {
-            item.setItemStack(leftover);
-        }
-    }
-
-    public InvSlot performItemOutput(InventoryHolder source, int amount, ServePolicy serve, OutputPolicy output) {
 
         int size = source.getInventory().getSize();
         Iterator<Integer> slots = serve == ServePolicy.RANDOM
@@ -355,14 +337,41 @@ public class HopperFilter implements Listener {
                 else {
                     item = null;
                 }
-                System.out.println("==============");
-                System.out.println("TAKING " + take + " FROM SLOT " + slot + " LEAVING " + item);
+                // System.out.println("SERVE: " + serve);
+                // System.out.println("OUTPUT: " + output);
+                // System.out.println("RETRIEVE: " + retrieve);
+                // System.out.println("INPUT: " + input);
+
+                if (isTargeted(source, dest)) {
+                    System.out.println("TAKING " + take + " FROM SLOT " + slot + " LEAVING " + item);
+                }
 
                 source.getInventory().setItem(slot, item);
-                return new InvSlot(slot, take);
+                InvSlot served = new InvSlot(slot, take);
+
+                ItemStack leftover = performItemInput(dest, served.getItem(), retrieve, input);
+                if (leftover == null) {
+                    break;
+                }
+                else {
+                    performItemRecall(new InvSlot(served.getSlot(), leftover), source);
+                }
+                if (isTargeted(source, dest)) {
+                    System.out.println("++++++++++++++");
+                }
             }
         }
-        return null;
+    }
+
+    public void performTransfer(Item item, InventoryHolder dest, RetrievePolicy retrieve, InputPolicy input) {
+
+        ItemStack leftover = performItemInput(dest, item.getItemStack(), retrieve, input);
+        if (leftover == null) {
+            item.remove();
+        }
+        else {
+            item.setItemStack(leftover);
+        }
     }
 
     public ItemStack performItemInput(InventoryHolder dest, ItemStack served, RetrievePolicy retrieve, InputPolicy input) {
@@ -393,8 +402,10 @@ public class HopperFilter implements Listener {
                     total -= overflow;
                     leftovers -= (total - current.getAmount());
 
-                    System.out.println("FOUND FREE SPACE FOR " + served + " AT SLOT " + slot + " WITH " + current
-                            + " (" + total + " total and " + leftovers + " leftover)");
+                    if (isTargeted(dest)) {
+                        System.out.println("FOUND FREE SPACE FOR " + served + " AT SLOT " + slot + " WITH " + current
+                                + " (" + total + " total and " + leftovers + " leftover)");
+                    }
 
                     current.setAmount(total);
                     dest.getInventory().setItem(slot, current);
@@ -416,7 +427,9 @@ public class HopperFilter implements Listener {
                 ItemStack current = dest.getInventory().getItem(slot);
                 if (current == null || current.getAmount() < 1) {
 
-                    System.out.println("FOUND EMPTY SPACE FOR " + served + " AT SLOT " + slot);
+                    if (isTargeted(dest)) {
+                        System.out.println("FOUND EMPTY SPACE FOR " + served + " AT SLOT " + slot);
+                    }
 
                     dest.getInventory().setItem(slot, served);
                     leftovers = 0;
@@ -424,7 +437,9 @@ public class HopperFilter implements Listener {
             }
         }
         if (leftovers == 0) {
-            System.out.println("NOTHING LEFT OVER!");
+            if (isTargeted(dest)) {
+                System.out.println("NOTHING LEFT OVER!");
+            }
             return null;
         }
         else {
@@ -436,8 +451,30 @@ public class HopperFilter implements Listener {
 
     public void performItemRecall(InvSlot recall, InventoryHolder source) {
 
-        System.out.println("RECALLING " + recall.getItem() + " TO SLOT " + recall.getSlot());
+        if (isTargeted(source)) {
+            System.out.println("RECALLING " + recall.getItem() + " TO SLOT " + recall.getSlot());
+        }
 
-        source.getInventory().setItem(recall.getSlot(), recall.getItem());
+        ItemStack current = source.getInventory().getItem(recall.getSlot());
+        ItemStack incoming = recall.getItem().clone();
+        if (current != null) {
+            // if something's already there, add recall amount to the current amount
+            // anything over max stack size will just be destroyed
+            incoming.setAmount(incoming.getAmount() + current.getAmount());
+        }
+        source.getInventory().setItem(recall.getSlot(), incoming);
+    }
+
+    private boolean isTargeted(InventoryHolder... holders) {
+        for (InventoryHolder holder : holders) {
+            if (holder instanceof BlockState) {
+                if (((BlockState) holder).isPlaced()) {
+                    if (((BlockState) holder).getBlock().equals(plugin.target)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 }
