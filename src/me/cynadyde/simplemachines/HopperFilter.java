@@ -7,6 +7,7 @@ import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.BlockState;
+import org.bukkit.block.Hopper;
 import org.bukkit.configuration.Configuration;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Entity;
@@ -25,6 +26,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 public class HopperFilter implements Listener {
@@ -130,6 +132,13 @@ public class HopperFilter implements Listener {
         final InventoryHolder source = event.getSource().getHolder();
         final InventoryHolder dest = event.getDestination().getHolder();
 
+        if (source instanceof Hopper) {
+            System.out.println("The snapshot contents are: " +
+                    Arrays.stream(((Hopper) source).getSnapshotInventory().getContents())
+                            .map(item -> item == null ? "AIR" : item.toString())
+                            .collect(Collectors.joining(", ")));
+        }
+
         if (source == null || dest == null) return;
         boolean takeover = false;
 
@@ -191,7 +200,7 @@ public class HopperFilter implements Listener {
             /* by transferring a dummy item instead of out-right canceling the event,
                we trick craft bukkit into administering the proper hopper cooldown. */
             // event.setItem(new ItemStack(Material.AIR, 0));
-            event.setItem(DUMMY);
+//            event.setItem(DUMMY);
 
             /* get the transfer amount from the spigot config since the event's item
                could just be a partial amount due to too few slot contents to take. */
