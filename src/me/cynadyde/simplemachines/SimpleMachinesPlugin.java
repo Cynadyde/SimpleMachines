@@ -10,10 +10,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 public class SimpleMachinesPlugin extends JavaPlugin implements Listener {
 
-    // TODO change up hopper mechanics a little bit:
-    //   should be able to serve items in round-robin order
-
-    Block target = null;
+    Block target = null;  // debug purposes
 
     @Override
     public void onEnable() {
@@ -24,7 +21,7 @@ public class SimpleMachinesPlugin extends JavaPlugin implements Listener {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
 
-        if (command == getCommand("target")) {
+        if (command == getCommand("target")) {  // debug purposes
             if (sender instanceof Player) {
                 Block block = ((Player) sender).getTargetBlockExact(16);
                 target = (block != null && block.getState() instanceof Container) ? block : null;

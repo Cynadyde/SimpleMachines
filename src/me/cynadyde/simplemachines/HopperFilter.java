@@ -1,129 +1,179 @@
 package me.cynadyde.simplemachines;
 
 import me.cynadyde.simplemachines.util.InvSlotItem;
-import me.cynadyde.simplemachines.util.InvMovePair;
 import me.cynadyde.simplemachines.util.RandomPermuteIterator;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
-import org.bukkit.block.Block;
-import org.bukkit.block.BlockFace;
-import org.bukkit.block.BlockState;
-import org.bukkit.block.Container;
+import org.bukkit.block.*;
 import org.bukkit.entity.Item;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryMoveItemEvent;
+import org.bukkit.event.inventory.InventoryPickupItemEvent;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 
-import java.util.*;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
 import java.util.stream.IntStream;
 
 public class HopperFilter implements Listener {
 
-    /** The block faces that a hopper filter can be attached to. */
+    /**
+     * The block faces that a hopper filter can be attached to.
+     */
     public static final List<BlockFace> FACES = Collections.unmodifiableList(Arrays.asList(
             BlockFace.NORTH, BlockFace.EAST, BlockFace.SOUTH, BlockFace.WEST, BlockFace.UP, BlockFace.DOWN));
 
-    /** The order to search for an item to take out when transferring. */
+    /**
+     * The order to search for an item to take out when transferring.
+     */
     public enum ServePolicy {NORMAL, REVERSED, RANDOM}
 
-    /** The order to search for a slot to put a transferred item into. */
+    /**
+     * The order to search for a slot to put a transferred item into.
+     */
     public enum RetrievePolicy {NORMAL, REVERSED, RANDOM}
 
-    /** The rules when choosing a slot to have an item transferred in. */
+    /**
+     * The rules when choosing a slot to have an item transferred in.
+     */
     public enum InputPolicy {NORMAL, MAX_ONE, LOCK_EMPTY}
 
-    /** The rules when choosing a slot to have an item transferred out. */
+    /**
+     * The rules when choosing a slot to have an item transferred out.
+     */
     public enum OutputPolicy {NORMAL, MIN_ONE}
 
     private final SimpleMachinesPlugin plugin;
-    private final Map<InvMovePair, Integer> invMoveAttempts;
+//    private final Map<InvMovePair, Integer> invMoveAttempts;
+
+    private Field tileEntityField;
+    private Method setCooldownMethod;
 
     public HopperFilter(SimpleMachinesPlugin plugin) {
         this.plugin = plugin;
-        this.invMoveAttempts = new HashMap<>();
-    }
+//        this.invMoveAttempts = new HashMap<>();
 
-//    @EventHandler(priority = EventPriority.MONITOR)
-//    public void onInventoryPickupItem(InventoryPickupItemEvent event) {
-//
-//        if (event.isCancelled()) return;
-//        boolean takeover = false;
-//
-//        RetrievePolicy retrieve = RetrievePolicy.NORMAL;
-//        InputPolicy input = InputPolicy.NORMAL;
-//
-//        InventoryHolder dest = event.getInventory().getHolder();
-//        if (dest instanceof Container) {
-//            Block destBlock = ((Container) dest).getBlock();
-//
-//            for (BlockFace face : FACES) {
-//                switch (destBlock.getRelative(face).getType()) {
-//                    case SPRUCE_TRAPDOOR:
-//                        input = InputPolicy.MAX_ONE;
-//                        takeover = true;
-//                        break;
-//                    case BIRCH_TRAPDOOR:
-//                        input = InputPolicy.LOCK_EMPTY;
-//                        takeover = true;
-//                        break;
-//                    case ACACIA_TRAPDOOR:
-//                        retrieve = RetrievePolicy.REVERSED;
-//                        takeover = true;
-//                        break;
-//                    case WARPED_TRAPDOOR:
-//                        retrieve = RetrievePolicy.RANDOM;
-//                        takeover = true;
-//                        break;
-//                }
-//            }
-//        }
-//        if (takeover) {
-//
-//            final Item s = event.getItem();
-//            final InventoryHolder d = event.getInventory().getHolder();
-//            final RetrievePolicy r = retrieve;
-//            final InputPolicy i = input;
-//
-//            /* cancel the event despite our monitor priority so that
-//               we can mimic the result of the event (with more control) */
-//            event.setCancelled(true);
-//            plugin.getServer().getScheduler().runTaskLater(
-//                    plugin, () -> performTransfer(s, d, r, i), 0L);
-//        }
-//    }
 
-    @EventHandler(priority = EventPriority.LOWEST)
-    public void onInventoryMoveItemFirst(InventoryMoveItemEvent event) {
+        /* Hopper hopper; // get a hopper
+           hopper.setCooldown(5); */
+        try {
+            String craftBukkitModule = plugin.getServer().getClass().getPackage().getName();
 
-        InvMovePair movePair = new InvMovePair(
-                event.getSource().getHolder(),
-                event.getDestination().getHolder());
+            Class<?> blockEntityStateClass = Class.forName(craftBukkitModule + ".block.CraftBlockEntityState");
+            Class<?> tileEntityHopperClass = Class.forName(craftBukkitModule + ".TileEntityHopper");
 
-        Integer remaining = invMoveAttempts.get(movePair);
-        if (remaining != null) {
-            if (remaining > 0) {
-                invMoveAttempts.put(movePair, remaining - 1);
-                event.setCancelled(true);
-            }
-            else {
-                invMoveAttempts.remove(movePair);
-            }
+            tileEntityField = blockEntityStateClass.getDeclaredField("tileEntity");
+            setCooldownMethod = tileEntityHopperClass.getDeclaredMethod("setCooldown", int.class);
+
+            tileEntityField.setAccessible(true);
+            setCooldownMethod.setAccessible(true);
+        }
+        catch (ClassNotFoundException | NoSuchFieldException | NoSuchMethodException ex) {
+
+            plugin.getLogger().severe("could not perform CraftHopper reflection: " + ex);
+
+            tileEntityField = null;
+            setCooldownMethod = null;
         }
     }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onInventoryPickupItem(InventoryPickupItemEvent event) {
+
+        if (event.isCancelled()) return;
+
+        InventoryHolder dest = event.getInventory().getHolder();
+        if (dest == null) return;
+
+        boolean takeover = false;
+
+        RetrievePolicy retrieve = RetrievePolicy.NORMAL;
+        InputPolicy input = InputPolicy.NORMAL;
+
+        if (dest instanceof Container) {
+            Block to = ((Container) dest).getBlock();
+
+            for (BlockFace face : FACES) {
+                switch (to.getRelative(face).getType()) {
+                    case SPRUCE_TRAPDOOR:
+                        if (input == InputPolicy.NORMAL) {
+                            input = InputPolicy.MAX_ONE;
+                            takeover = true;
+                        }
+                        break;
+                    case BIRCH_TRAPDOOR:
+                        if (input == InputPolicy.NORMAL) {
+                            input = InputPolicy.LOCK_EMPTY;
+                            takeover = true;
+                        }
+                        break;
+                    case ACACIA_TRAPDOOR:
+                        if (retrieve == RetrievePolicy.NORMAL) {
+                            retrieve = RetrievePolicy.REVERSED;
+                            takeover = true;
+                        }
+                        break;
+                    case WARPED_TRAPDOOR:
+                        if (retrieve == RetrievePolicy.NORMAL) {
+                            retrieve = RetrievePolicy.RANDOM;
+                            takeover = true;
+                        }
+                        break;
+                }
+            }
+        }
+        if (takeover) {
+
+            final Item s = event.getItem();
+            final InventoryHolder d = dest;
+            final RetrievePolicy r = retrieve;
+            final InputPolicy i = input;
+
+            /* cancel the event despite our monitor priority so that
+               we can mimic the result of the event (with more control) */
+            event.setCancelled(true);
+            plugin.getServer().getScheduler().runTaskLater(
+                    plugin, () -> performItemTransfer(s, d, r, i), 0L);
+        }
+    }
+
+//    @EventHandler(priority = EventPriority.LOWEST)
+//    public void onInventoryMoveItemFirst(InventoryMoveItemEvent event) {
+//
+//        InvMovePair movePair = new InvMovePair(
+//                event.getSource().getHolder(),
+//                event.getDestination().getHolder());
+//
+//        Integer remaining = invMoveAttempts.get(movePair);
+//        if (remaining != null) {
+//            if (remaining > 0) {
+//                invMoveAttempts.put(movePair, remaining - 1);
+//                event.setCancelled(true);
+//            }
+//            else {
+//                invMoveAttempts.remove(movePair);
+//            }
+//        }
+//    }
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onInventoryMoveItemLast(InventoryMoveItemEvent event) {
 
         if (event.isCancelled()) return;
-        boolean takeover = false;
 
         InventoryHolder source = event.getSource().getHolder();
-        InventoryHolder dest = event.getSource().getHolder();
+        InventoryHolder dest = event.getDestination().getHolder();
 
         if (source == null || dest == null) return;
+        boolean takeover = false;
 
         ServePolicy serve = ServePolicy.NORMAL;
         OutputPolicy output = OutputPolicy.NORMAL;
@@ -132,69 +182,86 @@ public class HopperFilter implements Listener {
 
         World world = null;
 
-        if (event.getSource().getHolder() instanceof Container) {
-            Block from = ((Container) event.getSource().getHolder()).getBlock();
+        if (source instanceof Container) {
+            Block from = ((Container) source).getBlock();
             world = from.getWorld();
 
             for (BlockFace face : FACES) {
                 switch (from.getRelative(face).getType()) {
                     case JUNGLE_TRAPDOOR:
-                        serve = ServePolicy.REVERSED;
-                        takeover = true;
+                        if (serve == ServePolicy.NORMAL) {
+                            serve = ServePolicy.REVERSED;
+                            takeover = true;
+                        }
                         break;
                     case DARK_OAK_TRAPDOOR:
-                        output = OutputPolicy.MIN_ONE;
-                        takeover = true;
+                        if (output == OutputPolicy.NORMAL) {
+                            output = OutputPolicy.MIN_ONE;
+                            takeover = true;
+                        }
                         break;
                     case CRIMSON_TRAPDOOR:
-                        serve = ServePolicy.RANDOM;
-                        takeover = true;
+                        if (serve == ServePolicy.NORMAL) {
+                            serve = ServePolicy.RANDOM;
+                            takeover = true;
+                        }
                         break;
                 }
             }
         }
-        if (event.getDestination().getHolder() instanceof Container) {
-            Block to = ((Container) event.getDestination().getHolder()).getBlock();
+        if (dest instanceof Container) {
+            Block to = ((Container) dest).getBlock();
             world = to.getWorld();
 
             for (BlockFace face : FACES) {
                 switch (to.getRelative(face).getType()) {
                     case SPRUCE_TRAPDOOR:
-                        input = InputPolicy.MAX_ONE;
-                        takeover = true;
+                        if (input == InputPolicy.NORMAL) {
+                            input = InputPolicy.MAX_ONE;
+                            takeover = true;
+                        }
                         break;
                     case BIRCH_TRAPDOOR:
-                        input = InputPolicy.LOCK_EMPTY;
-                        takeover = true;
+                        if (input == InputPolicy.NORMAL) {
+                            input = InputPolicy.LOCK_EMPTY;
+                            takeover = true;
+                        }
                         break;
                     case ACACIA_TRAPDOOR:
-                        retrieve = RetrievePolicy.REVERSED;
-                        takeover = true;
+                        if (retrieve == RetrievePolicy.NORMAL) {
+                            retrieve = RetrievePolicy.REVERSED;
+                            takeover = true;
+                        }
                         break;
                     case WARPED_TRAPDOOR:
-                        retrieve = RetrievePolicy.RANDOM;
-                        takeover = true;
+                        if (retrieve == RetrievePolicy.NORMAL) {
+                            retrieve = RetrievePolicy.RANDOM;
+                            takeover = true;
+                        }
                         break;
                 }
             }
         }
         if (takeover) {
 
-            InvMovePair movePair = new InvMovePair(
-                    event.getSource().getHolder(),
-                    event.getDestination().getHolder());
+            // FIXME store the tick of the last attempt instead???
+            //  sometimes its the right speed and other times its too fast
 
-            invMoveAttempts.put(movePair,
-                    Bukkit.spigot().getConfig().getInt("world-settings." + world.getName() + ".ticks-per.hopper-transfer",
-                            Bukkit.spigot().getConfig().getInt("world-settings.default.ticks-per.hopper-transfer", 8)) / 8 - 1);
+//            InvMovePair movePair = new InvMovePair(
+//                    event.getSource().getHolder(),
+//                    event.getDestination().getHolder());
+//
+//            invMoveAttempts.put(movePair,
+//                    Bukkit.spigot().getConfig().getInt("world-settings." + world.getName() + ".ticks-per.hopper-transfer",
+//                            Bukkit.spigot().getConfig().getInt("world-settings.default.ticks-per.hopper-transfer", 8)) / 8 - 1);
 
             // item amount (set to spigot world config hopper take amount)
             int a = Bukkit.spigot().getConfig().getInt("world-settings." + world.getName() + ".hopper-amount",
                     Bukkit.spigot().getConfig().getInt("world-settings.default.hopper-amount", 1));
             if (a < 1) return;
 
-            final InventoryHolder s = event.getSource().getHolder();
-            final InventoryHolder d = event.getDestination().getHolder();
+            final InventoryHolder s = source;
+            final InventoryHolder d = dest;
             final ServePolicy e = serve;
             final OutputPolicy o = output;
             final RetrievePolicy r = retrieve;
@@ -204,11 +271,11 @@ public class HopperFilter implements Listener {
                we can mimic the result of the event (with more control) */
             event.setCancelled(true);
             plugin.getServer().getScheduler().runTaskLater(
-                    plugin, () -> performTransfer(s, d, a, e, o, r, i), 1L);
+                    plugin, () -> performItemTransfer(s, d, a, e, o, r, i), 0L);
         }
     }
 
-    public void performTransfer(InventoryHolder source, InventoryHolder dest, int amount,
+    public void performItemTransfer(InventoryHolder source, InventoryHolder dest, int amount,
             ServePolicy serve, OutputPolicy output, RetrievePolicy retrieve, InputPolicy input) {
 
         int size = source.getInventory().getSize();
@@ -235,39 +302,51 @@ public class HopperFilter implements Listener {
                 else {
                     item = null;
                 }
-                // System.out.println("SERVE: " + serve);
-                // System.out.println("OUTPUT: " + output);
-                // System.out.println("RETRIEVE: " + retrieve);
-                // System.out.println("INPUT: " + input);
 
                 if (isTargeted(source, dest)) {
+                    System.out.println("SERVE: " + serve);
+                    System.out.println("OUTPUT: " + output);
+                    System.out.println("RETRIEVE: " + retrieve);
+                    System.out.println("INPUT: " + input);
+
                     System.out.println("TAKING " + take + " FROM SLOT " + slot + " LEAVING " + item);
                 }
 
                 source.getInventory().setItem(slot, item);
-                InvSlotItem served = new InvSlotItem(slot, take);
-
-                ItemStack leftover = performItemInput(dest, served.getItem(), retrieve, input);
+                ItemStack leftover = performItemInput(dest, take, retrieve, input);
                 if (leftover == null) {
                     break;
                 }
                 else {
-                    performItemRecall(new InvSlotItem(served.getSlot(), leftover), source);
-                }
-                if (isTargeted(source, dest)) {
-                    System.out.println("++++++++++++++");
+                    if (isTargeted(source)) {
+                        System.out.println("RECALLING " + leftover + " TO SLOT " + slot);
+                    }
+
+                    ItemStack current = source.getInventory().getItem(slot);
+                    if (current != null) {
+                        // if something's already there, add recall amount to the current amount
+                        // anything over max stack size will just be destroyed
+                        leftover.setAmount(leftover.getAmount() + current.getAmount());
+                    }
+                    source.getInventory().setItem(slot, leftover);
                 }
             }
         }
+        if (isTargeted(source, dest)) {
+            System.out.println("++++++++++++++");
+        }
     }
 
-    public void performTransfer(Item item, InventoryHolder dest, RetrievePolicy retrieve, InputPolicy input) {
+    public void performItemTransfer(Item item, InventoryHolder dest, RetrievePolicy retrieve, InputPolicy input) {
 
         ItemStack leftover = performItemInput(dest, item.getItemStack(), retrieve, input);
         if (leftover == null) {
             item.remove();
         }
         else {
+            if (isTargeted(dest)) {
+                System.out.println("ITEM ENTITY HAS " + leftover + " LEFTOVER");
+            }
             item.setItemStack(leftover);
         }
     }
@@ -334,7 +413,7 @@ public class HopperFilter implements Listener {
                 }
             }
         }
-        if (leftovers == 0) {
+        if (leftovers <= 0) {
             if (isTargeted(dest)) {
                 System.out.println("NOTHING LEFT OVER!");
             }
@@ -347,20 +426,13 @@ public class HopperFilter implements Listener {
         }
     }
 
-    public void performItemRecall(InvSlotItem recall, InventoryHolder source) {
-
-        if (isTargeted(source)) {
-            System.out.println("RECALLING " + recall.getItem() + " TO SLOT " + recall.getSlot());
+    private void setHopperCooldown(Hopper hopper, int cooldown) {
+        try {
+            setCooldownMethod.invoke(tileEntityField.get(hopper), cooldown);
         }
-
-        ItemStack current = source.getInventory().getItem(recall.getSlot());
-        ItemStack incoming = recall.getItem().clone();
-        if (current != null) {
-            // if something's already there, add recall amount to the current amount
-            // anything over max stack size will just be destroyed
-            incoming.setAmount(incoming.getAmount() + current.getAmount());
+        catch (IllegalAccessException | InvocationTargetException ex) {
+            plugin.getLogger().severe("could not perform CraftHopper reflection access: " + ex);
         }
-        source.getInventory().setItem(recall.getSlot(), incoming);
     }
 
     private boolean isTargeted(InventoryHolder... holders) {
