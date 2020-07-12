@@ -3,6 +3,10 @@ package me.cynadyde.simplemachines.util;
 import java.util.Iterator;
 import java.util.Random;
 
+/**
+ * An iterator over an integer range that returns each
+ * element in a random order once.
+ */
 public class RandomPermuteIterator implements Iterator<Integer> {
 
     // solution from: https://stackoverflow.com/a/29158917
@@ -22,11 +26,11 @@ public class RandomPermuteIterator implements Iterator<Integer> {
         this(start, end, new Random());
     }
 
-    public RandomPermuteIterator(int start, int end, Random rng) {
+    public RandomPermuteIterator(int start, int end, Random seeder) {
         this.OFFSET = start;
         this.SIZE = end - start;
         this.MODULUS = (int) Math.pow(2, Math.ceil(Math.log(SIZE) / Math.log(2))); // round size to next power of 2
-        this.seed = rng.nextInt(SIZE);
+        this.seed = seeder.nextInt(SIZE);
         this.next = seed;
         this.ended = false;
     }
@@ -38,7 +42,6 @@ public class RandomPermuteIterator implements Iterator<Integer> {
 
     @Override
     public Integer next() {
-        // i'm guessing we modulus a power of 2 instead of size for performance?
         do { next = (MULTIPLIER * next + INCREMENT) % MODULUS; }
         while (next >= SIZE);
         if (next == seed) {

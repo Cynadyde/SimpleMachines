@@ -1,6 +1,8 @@
-package me.cynadyde.simplemachines;
+package me.cynadyde.simplemachines.machine;
 
-import org.bukkit.ChatColor;
+import me.cynadyde.simplemachines.SimpleMachinesPlugin;
+import me.cynadyde.simplemachines.transfer.OutputPolicy;
+import me.cynadyde.simplemachines.transfer.TransferSourcePolicy;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
@@ -12,7 +14,6 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockDispenseEvent;
 import org.bukkit.inventory.*;
-import org.bukkit.inventory.meta.ItemMeta;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -48,13 +49,18 @@ public class AutoCrafter implements Listener {
         if (isAutoCraftMachine(block)) {
 
             Dispenser dispenser = ((Dispenser) block.getState());
-            ItemStack[] contents = dispenser.getInventory().getContents();
-            ItemStack[] ingredients = airFiltersRemoved(contents);
-            if (hasMoreThanOneOfEach(ingredients)) {
+            TransferSourcePolicy sourcePolicy = TransferSourcePolicy.ofInventory(dispenser.getInventory());
+            OutputPolicy output = sourcePolicy.OUTPUT;
 
-                ItemStack result = crafted(ingredients);
+            ItemStack[] contents = dispenser.getInventory().getContents();
+            ItemStack[] ingredients = takeIngredients(contents, output);
+
+            if (Arrays.stream(ingredients).anyMatch(Objects::nonNull)) {
+
+                ItemStack result = getCraftingResult(ingredients);
                 if (result != null) {
                     List<ItemStack> spill = new ArrayList<>();
+
                     Block below = block.getRelative(BlockFace.DOWN, 2);
                     Location dest = below.getLocation().add(0.5, 0.5, 0.5);
 
@@ -70,51 +76,37 @@ public class AutoCrafter implements Listener {
                             below.getWorld().dropItem(dest, spilled);
                         }
                     }
-                    removeOneFromEachNonAir(contents);
                     dispenser.getInventory().setContents(contents);
                 }
             }
         }
     }
 
-    private boolean isAirFilter(ItemStack item) {
-        if (item != null) {
-            ItemMeta meta = item.getItemMeta();
-            if (meta != null && meta.hasDisplayName()) {
-                String name = ChatColor.stripColor(meta.getDisplayName().trim()).toLowerCase();
-                return name.equals("minecraft:air") || name.equals("air");
+    public ItemStack[] takeIngredients(ItemStack[] items, OutputPolicy output) {
+
+        ItemStack[] ingredients = new ItemStack[items.length];
+        // either everything is able to be pulled out or nothing will be...
+        // this protects against crafting unexpected recipes from partial ingredients
+        for (ItemStack item : items) {
+            if (item != null && output == OutputPolicy.MIN_ONE && item.getAmount() == 1 && item.getMaxStackSize() > 1) {
+                return ingredients;
             }
         }
-        return false;
-    }
-
-    private ItemStack[] airFiltersRemoved(ItemStack[] items) {
-        ItemStack[] result = new ItemStack[items.length];
+        // mutate the items array, taking one of each
         for (int i = 0; i < items.length; i++) {
             ItemStack item = items[i];
-            result[i] = isAirFilter(item) ? null : item;
-        }
-        return result;
-    }
+            if (item != null) {
+                ItemStack ingredient = item.clone();
 
-    private boolean hasMoreThanOneOfEach(ItemStack[] items) {
-        for (ItemStack item : items) {
-            if (item != null && item.getAmount() <= 1) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private void removeOneFromEachNonAir(ItemStack[] items) {
-        for (ItemStack item : items) {
-            if (item != null && !isAirFilter(item)) {
                 item.setAmount(item.getAmount() - 1);
+                ingredient.setAmount(1);
+                ingredients[i] = item;
             }
         }
+        return ingredients;
     }
 
-    public ItemStack crafted(ItemStack[] ingredients) {
+    public ItemStack getCraftingResult(ItemStack[] ingredients) {
         if (ingredients.length != 9) {
             throw new IllegalArgumentException("ingredients array must be of length 9");
         }

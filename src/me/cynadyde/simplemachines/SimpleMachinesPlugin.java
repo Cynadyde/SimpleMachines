@@ -1,5 +1,7 @@
 package me.cynadyde.simplemachines;
 
+import me.cynadyde.simplemachines.machine.AutoCrafter;
+import me.cynadyde.simplemachines.machine.HopperFilter;
 import org.bukkit.block.Block;
 import org.bukkit.block.Container;
 import org.bukkit.command.Command;
@@ -10,7 +12,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 public class SimpleMachinesPlugin extends JavaPlugin implements Listener {
 
-    Block target = null;  // debug purposes
+    public Block target = null;  // debug purposes
 
     @Override
     public void onEnable() {
