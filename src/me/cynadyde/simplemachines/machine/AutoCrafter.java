@@ -35,7 +35,7 @@ public class AutoCrafter implements Listener {
 
             event.setCancelled(true);
             // have to run this code next tick so that the dispensed item is put back (due to event cancel)
-            plugin.getServer().getScheduler().runTaskLater(plugin, () -> handleAutoCraft(block), 1L);
+            plugin.getServer().getScheduler().runTaskLater(plugin, () -> handleAutoCraft(block), 0L);
         }
     }
 
@@ -49,13 +49,12 @@ public class AutoCrafter implements Listener {
         if (isAutoCraftMachine(block)) {
 
             Dispenser dispenser = ((Dispenser) block.getState());
-            TransferSourcePolicy sourcePolicy = TransferSourcePolicy.ofInventory(dispenser.getInventory());
-            OutputPolicy output = sourcePolicy.OUTPUT;
+            OutputPolicy output = TransferSourcePolicy.ofInventory(dispenser.getInventory()).OUTPUT;
 
             ItemStack[] contents = dispenser.getInventory().getContents();
             ItemStack[] ingredients = takeIngredients(contents, output);
 
-            if (Arrays.stream(ingredients).anyMatch(Objects::nonNull)) {
+            if (ingredients != null) {
 
                 ItemStack result = getCraftingResult(ingredients);
                 if (result != null) {
@@ -85,11 +84,14 @@ public class AutoCrafter implements Listener {
     public ItemStack[] takeIngredients(ItemStack[] items, OutputPolicy output) {
 
         ItemStack[] ingredients = new ItemStack[items.length];
+        boolean keepOne = output == OutputPolicy.MIN_ONE;
+        boolean anyFound = false;
+
         // either everything is able to be pulled out or nothing will be...
         // this protects against crafting unexpected recipes from partial ingredients
         for (ItemStack item : items) {
-            if (item != null && output == OutputPolicy.MIN_ONE && item.getAmount() == 1 && item.getMaxStackSize() > 1) {
-                return ingredients;
+            if (item != null && keepOne && item.getAmount() == 1 && item.getMaxStackSize() > 1) {
+                return null;
             }
         }
         // mutate the items array, taking one of each
@@ -101,9 +103,11 @@ public class AutoCrafter implements Listener {
                 item.setAmount(item.getAmount() - 1);
                 ingredient.setAmount(1);
                 ingredients[i] = item;
+
+                anyFound = true;
             }
         }
-        return ingredients;
+        return anyFound ? ingredients : null;
     }
 
     public ItemStack getCraftingResult(ItemStack[] ingredients) {

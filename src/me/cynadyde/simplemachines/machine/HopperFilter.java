@@ -99,19 +99,21 @@ public class HopperFilter implements Listener {
     @EventHandler(priority = EventPriority.LOWEST)
     public void onSpammedInventoryMoveItem(InventoryMoveItemEvent event) {
 
-        /* prevent hoppers from pulling items from another container
-               more than once in a row due to event cancellation. */
+        /* prevent hoppers from immediately trying to pull items from
+               another container again when the event is cancelled. */
         if (event.getDestination() == event.getInitiator()) {
 
             InventoryMoveItemEvent prevEvent = lastSpammedInvMoveItemEvent;
             lastSpammedInvMoveItemEvent = event;
 
+            // this is run after the first...
             if (prevEvent != null
                     && event.getSource().equals(prevEvent.getSource())
                     && event.getDestination().equals(prevEvent.getDestination())) {
 
                 event.setCancelled(true);
             }
+            // this is run on the first...
             else {
                 final InventoryHolder dest = event.getDestination().getHolder();
 
@@ -122,8 +124,7 @@ public class HopperFilter implements Listener {
                         setHopperCooldown((Hopper) dest, interval);
                     }
                 };
-                /* all the spammed events are fired within a single loop.
-                   this task will run after that. */
+                /* this is run once all the spammed events have been fired for the tick. */
                 plugin.getServer().getScheduler().runTaskLater(plugin, task, 0L);
             }
         }

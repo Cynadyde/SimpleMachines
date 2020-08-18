@@ -10,3 +10,5 @@ description: >
 commands:
   target:
     description: targets the container for debug logging
+  state:
+    description: prints the state of the targeted block
