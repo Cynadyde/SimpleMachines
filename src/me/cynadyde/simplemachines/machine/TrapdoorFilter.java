@@ -23,7 +23,7 @@ import java.lang.reflect.Method;
 import java.util.Iterator;
 import java.util.stream.IntStream;
 
-public class HopperFilter implements Listener {
+public class TrapdoorFilter implements Listener {
 
     private final SimpleMachinesPlugin plugin;
     private InventoryMoveItemEvent lastSpammedInvMoveItemEvent;
@@ -35,7 +35,7 @@ public class HopperFilter implements Listener {
     private Field worldSpigotConfigField; // the NMS world's OBC spigot config
     private Method tileEntityHopperSetCooldownMethod;
 
-    public HopperFilter(SimpleMachinesPlugin plugin) {
+    public TrapdoorFilter(SimpleMachinesPlugin plugin) {
         this.plugin = plugin;
         this.lastSpammedInvMoveItemEvent = null;
 

@@ -3,7 +3,7 @@ package me.cynadyde.simplemachines;
 import me.cynadyde.simplemachines.machine.AutoCrafter;
 import me.cynadyde.simplemachines.machine.BlockBreaker;
 import me.cynadyde.simplemachines.machine.BlockPlacer;
-import me.cynadyde.simplemachines.machine.HopperFilter;
+import me.cynadyde.simplemachines.machine.TrapdoorFilter;
 import org.bukkit.block.Block;
 import org.bukkit.block.Container;
 import org.bukkit.command.Command;
@@ -19,7 +19,7 @@ public class SimpleMachinesPlugin extends JavaPlugin implements Listener {
     @Override
     public void onEnable() {
         getServer().getPluginManager().registerEvents(new AutoCrafter(this), this);
-        getServer().getPluginManager().registerEvents(new HopperFilter(this), this);
+        getServer().getPluginManager().registerEvents(new TrapdoorFilter(this), this);
         getServer().getPluginManager().registerEvents(new BlockBreaker(this), this);
         getServer().getPluginManager().registerEvents(new BlockPlacer(this), this);
     }
