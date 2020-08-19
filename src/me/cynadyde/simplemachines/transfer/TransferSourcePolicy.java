@@ -37,16 +37,16 @@ public class TransferSourcePolicy {
                     // unused...
                     break;
                 case DARK_OAK_TRAPDOOR:
-                    if (Utils.isTrapdoorCoveringFace((TrapDoor) adjacent.getBlockData(), face)) {
+                    if (Utils.isCoveringFace((TrapDoor) adjacent.getBlockData(), face)) {
                         output = OutputPolicy.MIN_ONE;
                     }
                 case JUNGLE_TRAPDOOR:
-                    if (Utils.isTrapdoorCoveringFace((TrapDoor) adjacent.getBlockData(), face)) {
+                    if (Utils.isCoveringFace((TrapDoor) adjacent.getBlockData(), face)) {
                         serve = ServePolicy.REVERSED;
                     }
                     break;
                 case CRIMSON_TRAPDOOR:
-                    if (Utils.isTrapdoorCoveringFace((TrapDoor) adjacent.getBlockData(), face)) {
+                    if (Utils.isCoveringFace((TrapDoor) adjacent.getBlockData(), face)) {
                         serve = ServePolicy.RANDOM;
                     }
                     break;

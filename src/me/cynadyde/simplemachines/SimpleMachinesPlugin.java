@@ -1,9 +1,6 @@
 package me.cynadyde.simplemachines;
 
-import me.cynadyde.simplemachines.machine.AutoCrafter;
-import me.cynadyde.simplemachines.machine.BlockBreaker;
-import me.cynadyde.simplemachines.machine.BlockPlacer;
-import me.cynadyde.simplemachines.machine.TrapdoorFilter;
+import me.cynadyde.simplemachines.machine.*;
 import org.bukkit.block.Block;
 import org.bukkit.block.Container;
 import org.bukkit.command.Command;
@@ -22,6 +19,7 @@ public class SimpleMachinesPlugin extends JavaPlugin implements Listener {
         getServer().getPluginManager().registerEvents(new TrapdoorFilter(this), this);
         getServer().getPluginManager().registerEvents(new BlockBreaker(this), this);
         getServer().getPluginManager().registerEvents(new BlockPlacer(this), this);
+        getServer().getPluginManager().registerEvents(new CircuitBoard(this), this);
     }
 
     @Override
@@ -39,7 +37,7 @@ public class SimpleMachinesPlugin extends JavaPlugin implements Listener {
                 if (sender instanceof Player) {
                     Block block = ((Player) sender).getTargetBlockExact(16);
                     if (block != null) {
-                        sender.sendMessage("§f[§3SM§f] §aLooking at: §b" + block.getState().toString());
+                        sender.sendMessage("§f[§3SM§f] §aLooking at: §b" + block.getState());
                     }
                 }
             }

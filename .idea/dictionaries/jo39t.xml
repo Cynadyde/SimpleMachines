@@ -2,7 +2,10 @@
   <dictionary name="jo39t">
     <words>
       <w>guis</w>
+      <w>harvestable</w>
+      <w>pickaxe</w>
       <w>redstone</w>
+      <w>stonecutter</w>
     </words>
   </dictionary>
 </component>

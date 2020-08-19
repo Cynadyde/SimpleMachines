@@ -35,22 +35,22 @@ public class TransferDestPolicy {
             Block adjacent = block.getRelative(face);
             switch (adjacent.getType()) {
                 case ACACIA_TRAPDOOR:
-                    if (Utils.isTrapdoorCoveringFace((TrapDoor) adjacent.getBlockData(), face)) {
+                    if (Utils.isCoveringFace((TrapDoor) adjacent.getBlockData(), face)) {
                         retrieve = RetrievePolicy.REVERSED;
                     }
                     break;
                 case SPRUCE_TRAPDOOR:
-                    if (Utils.isTrapdoorCoveringFace((TrapDoor) adjacent.getBlockData(), face)) {
+                    if (Utils.isCoveringFace((TrapDoor) adjacent.getBlockData(), face)) {
                         input = InputPolicy.MAX_ONE;
                     }
                     break;
                 case BIRCH_TRAPDOOR:
-                    if (Utils.isTrapdoorCoveringFace((TrapDoor) adjacent.getBlockData(), face)) {
+                    if (Utils.isCoveringFace((TrapDoor) adjacent.getBlockData(), face)) {
                         input = InputPolicy.LOCK_EMPTY;
                     }
                     break;
                 case WARPED_TRAPDOOR:
-                    if (Utils.isTrapdoorCoveringFace((TrapDoor) adjacent.getBlockData(), face)) {
+                    if (Utils.isCoveringFace((TrapDoor) adjacent.getBlockData(), face)) {
                         retrieve = RetrievePolicy.RANDOM;
                     }
                     break;

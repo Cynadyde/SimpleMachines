@@ -1,19 +1,28 @@
 package me.cynadyde.simplemachines.util;
 
+import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
+import org.bukkit.block.Container;
+import org.bukkit.block.Dropper;
 import org.bukkit.block.data.Bisected;
+import org.bukkit.block.data.Directional;
 import org.bukkit.block.data.type.TrapDoor;
+import org.bukkit.entity.Item;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.util.Vector;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 public class Utils {
 
     private Utils() {}
+
+    /**
+     * The plugin's random number generator.
+     */
+    public static final Random RNG = new Random();
 
     /**
      * The six faces of a cube.
@@ -21,28 +30,19 @@ public class Utils {
     public static final List<BlockFace> FACES = Collections.unmodifiableList(Arrays.asList(
             BlockFace.NORTH, BlockFace.EAST, BlockFace.SOUTH, BlockFace.WEST, BlockFace.UP, BlockFace.DOWN));
 
-    /**
-     * The eight types of trapdoors.
-     */
-    public static final List<Material> TRAPDOORS = Collections.unmodifiableList(Arrays.asList(
-            Material.OAK_TRAPDOOR, Material.SPRUCE_TRAPDOOR, Material.BIRCH_TRAPDOOR, Material.JUNGLE_TRAPDOOR,
-            Material.ACACIA_TRAPDOOR, Material.DARK_OAK_TRAPDOOR, Material.CRIMSON_TRAPDOOR, Material.WARPED_TRAPDOOR
-    ));
-
-    /**
-     * The four pairs of trapdoors corresponding to the four transfer policy types.
-     */
-    public static final List<List<Material>> TRAPDOOR_GROUPS = Collections.unmodifiableList(Arrays.asList(
-            Collections.unmodifiableList(Arrays.asList(Material.SPRUCE_TRAPDOOR, Material.BIRCH_TRAPDOOR)),
-            Collections.unmodifiableList(Arrays.asList(Material.DARK_OAK_TRAPDOOR, Material.OAK_TRAPDOOR)),
-            Collections.unmodifiableList(Arrays.asList(Material.JUNGLE_TRAPDOOR, Material.CRIMSON_TRAPDOOR)),
-            Collections.unmodifiableList(Arrays.asList(Material.ACACIA_TRAPDOOR, Material.WARPED_TRAPDOOR))
+    public static final List<Material> TOOLS = Collections.unmodifiableList(Arrays.asList(
+            Material.WOODEN_PICKAXE, Material.STONE_PICKAXE, Material.IRON_PICKAXE, Material.GOLDEN_PICKAXE, Material.DIAMOND_PICKAXE, Material.NETHERITE_PICKAXE,
+            Material.WOODEN_AXE, Material.STONE_AXE, Material.IRON_AXE, Material.GOLDEN_AXE, Material.DIAMOND_AXE, Material.NETHERITE_AXE,
+            Material.WOODEN_SHOVEL, Material.STONE_SHOVEL, Material.IRON_SHOVEL, Material.GOLDEN_SHOVEL, Material.DIAMOND_SHOVEL, Material.NETHERITE_SHOVEL,
+            Material.WOODEN_HOE, Material.STONE_HOE, Material.IRON_HOE, Material.GOLDEN_HOE, Material.DIAMOND_HOE, Material.NETHERITE_HOE,
+            Material.WOODEN_SWORD, Material.STONE_SWORD, Material.IRON_SWORD, Material.GOLDEN_SWORD, Material.DIAMOND_SWORD, Material.NETHERITE_SWORD,
+            Material.SHEARS
     ));
 
     /**
      * Tests if the given trapdoor is covering the given face.
      */
-    public static boolean isTrapdoorCoveringFace(TrapDoor trapdoor, BlockFace face) {
+    public static boolean isCoveringFace(TrapDoor trapdoor, BlockFace face) {
         switch (face) {
             case UP:
                 return !trapdoor.isOpen() && trapdoor.getHalf() == Bisected.Half.BOTTOM;
@@ -54,17 +54,39 @@ public class Utils {
     }
 
     /**
-     * Creates an item stack (amount 1) with the given display name and lore.
-     * Use '§' for color codes.
+     * Drops an item stack into the world as if from the given dropper.
      */
-    public static ItemStack createGuiItem(Material material, String name, String... lore) {
-        ItemStack item = new ItemStack(material, 1);
-        ItemMeta meta = item.getItemMeta();
-        if (meta != null) {
-            meta.setDisplayName(name);
-            meta.setLore(Arrays.asList(lore));
-            item.setItemMeta(meta);
+    public static void dropFromDropper(Dropper dropper, ItemStack item) {
+        /* ugh, kinda backwards to manually code the item being dispensed, but the
+            alternative creates another dispense event. (which then has to be isolated) */
+
+        BlockFace facing = ((Directional) dropper.getBlockData()).getFacing();
+        Block adjacent = dropper.getBlock().getRelative(facing);
+
+        List<ItemStack> spill = new ArrayList<>();
+
+        if (adjacent.getState() instanceof Container) {
+            // attempts to add the items to the container, returning anything that didn't fit
+            spill.addAll(((Container) adjacent.getState()).getInventory().addItem(item).values());
         }
-        return item;
+        else {
+            spill.add(item);
+        }
+        if (!spill.isEmpty()) {
+            ItemStack spilled = spill.get(0); // should never have more than 1
+
+            double x = dropper.getX() + 0.5 + (0.7 * facing.getModX());
+            double y = dropper.getY() + 0.5 + (0.7 * facing.getModY()) - (facing == BlockFace.DOWN || facing == BlockFace.UP ? 0.125 : 0.15625);
+            double z = dropper.getZ() + 0.5 + (0.7 * facing.getModZ());
+
+            Item drop = dropper.getWorld().dropItem(new Location(null, x, y, z), spilled);
+
+            double offset = (RNG.nextDouble() * 0.1) + 0.2;
+            drop.setVelocity(new Vector(
+                    (RNG.nextGaussian() * 0.007499999832361937 * 6D) + ((double) facing.getModX() * offset),
+                    (RNG.nextGaussian() * 0.007499999832361937 * 6D) + 0.20000000298023224,
+                    (RNG.nextGaussian() * 0.007499999832361937 * 6D) + ((double) facing.getModZ() * offset)
+            ));
+        }
     }
 }

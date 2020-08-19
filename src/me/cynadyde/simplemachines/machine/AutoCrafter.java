@@ -3,19 +3,15 @@ package me.cynadyde.simplemachines.machine;
 import me.cynadyde.simplemachines.SimpleMachinesPlugin;
 import me.cynadyde.simplemachines.transfer.OutputPolicy;
 import me.cynadyde.simplemachines.transfer.TransferSourcePolicy;
-import org.bukkit.Location;
+import me.cynadyde.simplemachines.util.Utils;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
-import org.bukkit.block.Container;
 import org.bukkit.block.Dropper;
-import org.bukkit.block.data.Directional;
-import org.bukkit.entity.Item;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockDispenseEvent;
 import org.bukkit.inventory.*;
-import org.bukkit.util.Vector;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -34,25 +30,23 @@ public class AutoCrafter implements Listener {
 
     @EventHandler
     public void onBlockDispense(BlockDispenseEvent event) {
-        Block block = event.getBlock();
-        if (isAutoCraftMachine(block)) {
-
+        if (isAutoCrafterMachine(event.getBlock())) {
             event.setCancelled(true);
 
             /* have to run this code next tick so that the inventory
                isn't overwritten by the event trying to cancel itself. */
-            plugin.getServer().getScheduler().runTaskLater(plugin, () -> doAutoCraft(block), 0L);
+            final Block machine = event.getBlock();
+            plugin.getServer().getScheduler().runTaskLater(plugin, () -> doAutoCraft(machine), 0L);
         }
     }
 
-    public boolean isAutoCraftMachine(Block block) {
+    public boolean isAutoCrafterMachine(Block block) {
         return block.getType() == Material.DROPPER
-                && block.getBlockData() instanceof Directional
                 && block.getRelative(BlockFace.DOWN).getType() == Material.CRAFTING_TABLE;
     }
 
     public void doAutoCraft(Block block) {
-        if (isAutoCraftMachine(block)) {
+        if (isAutoCrafterMachine(block)) {
 
             System.out.println("Doing auto craft! Hey!");
 
@@ -71,36 +65,7 @@ public class AutoCrafter implements Listener {
                     System.out.println("Got this recipe: " + recipe);
                     ItemStack result = recipe.getResult();
 
-                    /* ugh, kinda backwards to manually code the item being dispensed, but the
-                        alternative creates another dispense event. (which then has to be isolated) */
-                    List<ItemStack> spill = new ArrayList<>();
-
-                    BlockFace facing = ((Directional) block.getBlockData()).getFacing();
-                    Block adjacent = block.getRelative(facing);
-
-                    if (adjacent.getState() instanceof Container) {
-                        // attempts to add the items to the container, returning anything that didn't fit
-                        spill.addAll(((Container) adjacent.getState()).getInventory().addItem(result).values());
-                    }
-                    else {
-                        spill.add(result);
-                    }
-                    if (!spill.isEmpty()) {
-                        ItemStack spilled = spill.get(0); // should never have more than 1
-
-                        double x = block.getX() + 0.5 + (0.7 * facing.getModX());
-                        double y = block.getY() + 0.5 + (0.7 * facing.getModY()) - (facing == BlockFace.DOWN || facing == BlockFace.UP ? 0.125 : 0.15625);
-                        double z = block.getZ() + 0.5 + (0.7 * facing.getModZ());
-
-                        Item item = block.getWorld().dropItem(new Location(null, x, y, z), spilled);
-
-                        double offset = (random.nextDouble() * 0.1) + 0.2;
-                        item.setVelocity(new Vector(
-                                (random.nextGaussian() * 0.007499999832361937 * 6D) + ((double) facing.getModX() * offset),
-                                (random.nextGaussian() * 0.007499999832361937 * 6D) + 0.20000000298023224,
-                                (random.nextGaussian() * 0.007499999832361937 * 6D) + ((double) facing.getModZ() * offset)
-                        ));
-                    }
+                    Utils.dropFromDropper(dropper, result);
                     dropper.getInventory().setContents(calcLeftovers(contents, ingredients));
                 }
             }
