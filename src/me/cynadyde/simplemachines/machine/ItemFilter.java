@@ -2,19 +2,24 @@ package me.cynadyde.simplemachines.machine;
 
 import me.cynadyde.simplemachines.SimpleMachinesPlugin;
 import me.cynadyde.simplemachines.transfer.*;
+import me.cynadyde.simplemachines.util.PluginKey;
 import me.cynadyde.simplemachines.util.RandomPermuteIterator;
+import org.bukkit.Location;
 import org.bukkit.block.BlockState;
+import org.bukkit.block.Container;
 import org.bukkit.block.Hopper;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Item;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.inventory.InventoryMoveItemEvent;
 import org.bukkit.event.inventory.InventoryPickupItemEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.persistence.PersistentDataContainer;
 import org.spigotmc.SpigotWorldConfig;
 
 import java.lang.reflect.Field;
@@ -23,7 +28,9 @@ import java.lang.reflect.Method;
 import java.util.Iterator;
 import java.util.stream.IntStream;
 
-public class TrapdoorFilter implements Listener {
+// TODO liquids flow from bucket to bucket between containers
+
+public class ItemFilter implements Listener {
 
     private final SimpleMachinesPlugin plugin;
     private InventoryMoveItemEvent lastSpammedInvMoveItemEvent;
@@ -35,7 +42,7 @@ public class TrapdoorFilter implements Listener {
     private Field worldSpigotConfigField; // the NMS world's OBC spigot config
     private Method tileEntityHopperSetCooldownMethod;
 
-    public TrapdoorFilter(SimpleMachinesPlugin plugin) {
+    public ItemFilter(SimpleMachinesPlugin plugin) {
         this.plugin = plugin;
         this.lastSpammedInvMoveItemEvent = null;
 
@@ -74,17 +81,48 @@ public class TrapdoorFilter implements Listener {
         }
     }
 
+    @EventHandler(ignoreCancelled = true)
+    public void onBlockBreak(BlockBreakEvent event) {
+        BlockState state = event.getBlock().getState();
+        if (state instanceof Container) {
+            TransferScheme scheme = TransferScheme.ofContainer((Container) state);
+
+            if (scheme.isNonNormal()) {
+                Location dest = state.getLocation().add(0.5, 0.5, 0.5);
+                for (TransferPolicy policy : new TransferPolicy[] {
+                        scheme.RECEIVE,
+                        scheme.INPUT,
+                        scheme.SERVE,
+                        scheme.OUTPUT,
+                        scheme.LIQUIDS
+                }) {
+                    if (!policy.getToken().isAir()) {
+                        state.getWorld().dropItemNaturally(dest, new ItemStack(policy.getToken()));
+                    }
+                }
+                PersistentDataContainer pdc = ((Container) state).getPersistentDataContainer();
+                pdc.remove(PluginKey.RECEIVE_POLICY.get());
+                pdc.remove(PluginKey.INPUT_POLICY.get());
+                pdc.remove(PluginKey.SERVE_POLICY.get());
+                pdc.remove(PluginKey.OUTPUT_POLICY.get());
+
+                state.update();
+
+            }
+        }
+    }
+
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onInventoryPickupItem(InventoryPickupItemEvent event) {
 
         final Inventory dest = event.getInventory();
-        TransferDestPolicy destPolicy = TransferDestPolicy.ofInventory(dest);
+        TransferScheme destPolicy = TransferScheme.ofInventory(dest);
 
         boolean takeover = destPolicy.isNonNormal();
 
         if (takeover) {
             final Item s = event.getItem();
-            final RetrievePolicy r = destPolicy.RETRIEVE;
+            final ReceivePolicy r = destPolicy.RECEIVE;
             final InputPolicy i = destPolicy.INPUT;
 
             /* cancel and mimic the event with all the needed control. */
@@ -96,6 +134,14 @@ public class TrapdoorFilter implements Listener {
 
     @EventHandler(priority = EventPriority.LOWEST)
     public void onSpammedInventoryMoveItem(InventoryMoveItemEvent event) {
+
+        if (isTargeted(event.getSource())) {
+            System.out.println("caught InventoryMoveItemEvent...");
+            System.out.println(" source: " + event.getSource());
+            System.out.println(" dest: " + event.getDestination());
+            System.out.println(" source initiated? " + (event.getInitiator() == event.getSource()));
+            System.out.println(" item: " + event.getItem());
+        }
 
         /* prevent hoppers from immediately trying to pull items from
                another container again when the event is cancelled. */
@@ -134,10 +180,9 @@ public class TrapdoorFilter implements Listener {
         final Inventory source = event.getSource();
         final Inventory dest = event.getDestination();
 
-        TransferSourcePolicy sourcePolicy = TransferSourcePolicy.ofInventory(source);
-        TransferDestPolicy destPolicy = TransferDestPolicy.ofInventory(dest);
+        TransferScheme scheme = TransferScheme.ofInventory(dest);
 
-        boolean takeover = sourcePolicy.isNonNormal() || destPolicy.isNonNormal();
+        boolean takeover = scheme.isNonNormal();
 
         if (takeover) {
             event.setCancelled(true);
@@ -146,20 +191,20 @@ public class TrapdoorFilter implements Listener {
                could just be a partial amount due to too few slot contents to take. */
             final int amount = getHopperTransferAmount(source.getHolder());
 
-            // finalize the item transfer policies
-            final ServePolicy s = sourcePolicy.SERVE;
-            final OutputPolicy o = sourcePolicy.OUTPUT;
-            final RetrievePolicy r = destPolicy.RETRIEVE;
-            final InputPolicy i = destPolicy.INPUT;
+            final boolean si = event.getInitiator() == event.getSource();
+            final ServePolicy s = scheme.SERVE;
+            final OutputPolicy o = scheme.OUTPUT;
+            final ReceivePolicy r = scheme.RECEIVE;
+            final InputPolicy i = scheme.INPUT;
 
             /* now, mimic the event with all the needed control. */
-            Runnable task = () -> performItemTransfer(source, dest, amount, s, o, r, i);
+            Runnable task = () -> performItemTransfer(source, dest, amount, si, s, o, r, i);
             plugin.getServer().getScheduler().runTaskLater(plugin, task, 0L);
         }
     }
 
-    public void performItemTransfer(Inventory source, Inventory dest, int amount,
-            ServePolicy serve, OutputPolicy output, RetrievePolicy retrieve, InputPolicy input) {
+    public void performItemTransfer(Inventory source, Inventory dest, int amount, boolean sourceInitiated,
+            ServePolicy serve, OutputPolicy output, ReceivePolicy retrieve, InputPolicy input) {
 
         if (isTargeted(source, dest)) {
             System.out.println("++++++++++++++");
@@ -179,7 +224,7 @@ public class TrapdoorFilter implements Listener {
                 slot = (size - 1) - slot;
             }
             ItemStack current = source.getItem(slot);
-            if (output.test(current)) {
+            if (output.testSlot(current)) {
 
                 ItemStack transfer = current.clone();
 
@@ -197,7 +242,11 @@ public class TrapdoorFilter implements Listener {
                 source.setItem(slot, current);
 
                 if (source.getHolder() instanceof Hopper) {
-                    setHopperCooldown((Hopper) source.getHolder(), getHopperCheckInterval(source.getHolder()));
+                    int cooldown = sourceInitiated
+                            ? getHopperTransferInterval(source.getHolder())
+                            : getHopperCheckInterval(source.getHolder());
+
+                    setHopperCooldown((Hopper) source.getHolder(), cooldown);
                 }
                 if (leftover == 0) {
                     break;
@@ -214,7 +263,7 @@ public class TrapdoorFilter implements Listener {
         }
     }
 
-    public void performItemTransfer(Item item, Inventory dest, RetrievePolicy retrieve, InputPolicy input) {
+    public void performItemTransfer(Item item, Inventory dest, ReceivePolicy retrieve, InputPolicy input) {
 
         if (isTargeted(dest)) {
             System.out.println("++++++++++++++");
@@ -240,7 +289,7 @@ public class TrapdoorFilter implements Listener {
         }
     }
 
-    public int performItemInput(Inventory source, Inventory dest, ItemStack transfer, RetrievePolicy retrieve, InputPolicy input) {
+    public int performItemInput(Inventory source, Inventory dest, ItemStack transfer, ReceivePolicy retrieve, InputPolicy input) {
 
         int leftovers = transfer.getAmount();
 
@@ -250,14 +299,14 @@ public class TrapdoorFilter implements Listener {
         // try to complete existing stacks in the inventory...
         if (leftovers > 0 && input != InputPolicy.TO_EMPTY) {
 
-            slots = retrieve == RetrievePolicy.RANDOM
+            slots = retrieve == ReceivePolicy.RANDOM
                     ? new RandomPermuteIterator(0, size)
                     : IntStream.range(0, size).iterator();
 
             while (slots.hasNext() && leftovers > 0) {
 
                 int slot = slots.next();
-                if (retrieve == RetrievePolicy.REVERSED) {
+                if (retrieve == ReceivePolicy.REVERSED) {
                     slot = size - 1 - slot;
                 }
                 ItemStack current = dest.getItem(slot);
@@ -281,14 +330,14 @@ public class TrapdoorFilter implements Listener {
         // otherwise try to begin a new stack in the inventory...
         if (leftovers > 0 && input != InputPolicy.TO_NONEMPTY) {
 
-            slots = retrieve == RetrievePolicy.RANDOM
+            slots = retrieve == ReceivePolicy.RANDOM
                     ? new RandomPermuteIterator(0, size)
                     : IntStream.range(0, size).iterator();
 
             while (slots.hasNext() && leftovers > 0) {
 
                 int slot = slots.next();
-                if (retrieve == RetrievePolicy.REVERSED) {
+                if (retrieve == ReceivePolicy.REVERSED) {
                     slot = size - 1 - slot;
                 }
                 ItemStack current = dest.getItem(slot);

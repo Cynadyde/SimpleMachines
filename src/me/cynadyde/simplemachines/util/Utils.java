@@ -11,7 +11,9 @@ import org.bukkit.block.data.Directional;
 import org.bukkit.block.data.type.TrapDoor;
 import org.bukkit.entity.Item;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.util.Vector;
+import org.jetbrains.annotations.Contract;
 
 import java.util.*;
 
@@ -91,5 +93,39 @@ public class Utils {
                     (RNG.nextGaussian() * 0.007499999832361937 * 6D) + ((double) facing.getModZ() * offset)
             ));
         }
+    }
+
+    /**
+     * Tests if the given item stack is empty, null, or air.
+     */
+    @Contract("null -> true")
+    public static boolean isEmpty(ItemStack item) {
+        return item == null || item.getType().isAir() || item.getAmount() <= 0;
+    }
+
+    /**
+     * Tests if the given item stack exists and has a max stack size that has been reached.
+     */
+    @Contract("null -> false")
+    public static boolean isFull(ItemStack item) {
+        return item != null && item.getAmount() > 0 && item.getAmount() >= item.getMaxStackSize();
+    }
+
+    public static Material getMaterial(ItemStack item) {
+        return item == null ? Material.AIR : item.getType();
+    }
+
+    /**
+     * Creates an item stack (amount 1) with the given display name and lore. Use '§' for color codes.
+     */
+    public static ItemStack createGuiItem(Material material, String name, String... lore) {
+        ItemStack item = new ItemStack(material, 1);
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName(name);
+            meta.setLore(Arrays.asList(lore));
+            item.setItemMeta(meta);
+        }
+        return item;
     }
 }

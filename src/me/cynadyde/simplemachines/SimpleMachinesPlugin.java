@@ -1,6 +1,8 @@
 package me.cynadyde.simplemachines;
 
+import me.cynadyde.simplemachines.gui.ItemFilterGui;
 import me.cynadyde.simplemachines.machine.*;
+import me.cynadyde.simplemachines.util.PluginKey;
 import org.bukkit.block.Block;
 import org.bukkit.block.Container;
 import org.bukkit.command.Command;
@@ -13,13 +15,28 @@ public class SimpleMachinesPlugin extends JavaPlugin implements Listener {
 
     public Block target = null;  // debug purposes
 
+    private AutoCrafter autoCrafterModule;
+    private ItemFilter itemFilterModule;
+    private ItemFilterGui itemFilterGuiModule;
+    private BlockBreaker blockBreakerModule;
+    private BlockPlacer blockPlacerModule;
+    private RedstoneClock redstoneClockModule;
+
     @Override
     public void onEnable() {
-        getServer().getPluginManager().registerEvents(new AutoCrafter(this), this);
-        getServer().getPluginManager().registerEvents(new TrapdoorFilter(this), this);
-        getServer().getPluginManager().registerEvents(new BlockBreaker(this), this);
-        getServer().getPluginManager().registerEvents(new BlockPlacer(this), this);
-        getServer().getPluginManager().registerEvents(new CircuitBoard(this), this);
+        PluginKey.refresh(this);
+
+        getServer().getPluginManager().registerEvents(autoCrafterModule = new AutoCrafter(this), this);
+        getServer().getPluginManager().registerEvents(itemFilterModule = new ItemFilter(this), this);
+        getServer().getPluginManager().registerEvents(itemFilterGuiModule = new ItemFilterGui(this), this);
+        getServer().getPluginManager().registerEvents(blockBreakerModule = new BlockBreaker(this), this);
+        getServer().getPluginManager().registerEvents(blockPlacerModule = new BlockPlacer(this), this);
+        getServer().getPluginManager().registerEvents(redstoneClockModule = new RedstoneClock(this), this);
+    }
+
+    @Override
+    public void onDisable() {
+        itemFilterGuiModule.closeAllGuis();
     }
 
     @Override

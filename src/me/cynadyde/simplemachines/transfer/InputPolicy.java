@@ -1,35 +1,61 @@
 package me.cynadyde.simplemachines.transfer;
 
+import me.cynadyde.simplemachines.util.Utils;
+import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
-
-import java.util.function.Predicate;
 
 /**
  * The rules when choosing a slot to have an item transferred in.
  */
-public enum InputPolicy implements Predicate<ItemStack> {
+public enum InputPolicy implements TransferPolicy {
 
     /** Any slot may be ok to give items to. */
     NORMAL {
         @Override
-        public boolean test(ItemStack slot) {
-            return true;
+        public boolean testSlot(ItemStack slot) {
+            return !Utils.isFull(slot);
+        }
+
+        @Override
+        public Material getToken() {
+            return Material.AIR;
         }
     },
 
     /** Only empty slots are ok to give items to. */
     TO_EMPTY {
         @Override
-        public boolean test(ItemStack slot) {
-            return slot == null || slot.getType().isAir() || slot.getAmount() <= 0;
+        public boolean testSlot(ItemStack slot) {
+            return Utils.isEmpty(slot);
+        }
+
+        @Override
+        public Material getToken() {
+            return Material.SPRUCE_TRAPDOOR;
         }
     },
 
     /** Only non-empty slots are ok to give items to. */
     TO_NONEMPTY {
         @Override
-        public boolean test(ItemStack slot) {
-            return slot != null && !slot.getType().isAir() && slot.getAmount() > 0;
+        public boolean testSlot(ItemStack slot) {
+            return !Utils.isEmpty(slot) && !Utils.isFull(slot);
         }
+
+        @Override
+        public Material getToken() {
+            return Material.BIRCH_TRAPDOOR;
+        }
+    };
+
+    public abstract boolean testSlot(ItemStack slot);
+
+    public static InputPolicy fromToken(Material token) {
+        for (InputPolicy policy : values()) {
+            if (policy.getToken() == token) {
+                return policy;
+            }
+        }
+        return null;
     }
 }

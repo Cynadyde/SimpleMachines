@@ -7,9 +7,9 @@ import java.util.Iterator;
 import java.util.stream.IntStream;
 
 /**
- * The order to search for an item to take out when transferring.
+ * The order to search for a slot to put a transferred item into.
  */
-public enum ServePolicy implements TransferPolicy {
+public enum ReceivePolicy implements TransferPolicy {
     NORMAL {
         @Override
         public Iterator<Integer> getIterator(int length) {
@@ -30,7 +30,7 @@ public enum ServePolicy implements TransferPolicy {
 
         @Override
         public Material getToken() {
-            return Material.JUNGLE_TRAPDOOR;
+            return Material.ACACIA_TRAPDOOR;
         }
     },
     RANDOM {
@@ -41,14 +41,14 @@ public enum ServePolicy implements TransferPolicy {
 
         @Override
         public Material getToken() {
-            return Material.CRIMSON_TRAPDOOR;
+            return Material.WARPED_TRAPDOOR;
         }
     };
 
     public abstract Iterator<Integer> getIterator(int length);
 
-    public static ServePolicy fromToken(Material token) {
-        for (ServePolicy policy : values()) {
+    public static ReceivePolicy fromToken(Material token) {
+        for (ReceivePolicy policy : values()) {
             if (policy.getToken() == token) {
                 return policy;
             }
