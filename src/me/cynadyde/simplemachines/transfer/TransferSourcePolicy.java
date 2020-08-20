@@ -32,14 +32,18 @@ public class TransferSourcePolicy {
 
         for (BlockFace face : Utils.FACES) {
             Block adjacent = block.getRelative(face);
+
             switch (adjacent.getType()) {
                 case OAK_TRAPDOOR:
-                    // unused...
+                    if (Utils.isCoveringFace((TrapDoor) adjacent.getBlockData(), face)) {
+                        output = OutputPolicy.FROM_SOLO;
+                    }
                     break;
                 case DARK_OAK_TRAPDOOR:
                     if (Utils.isCoveringFace((TrapDoor) adjacent.getBlockData(), face)) {
-                        output = OutputPolicy.MIN_ONE;
+                        output = OutputPolicy.FROM_NONSOLO;
                     }
+                    break;
                 case JUNGLE_TRAPDOOR:
                     if (Utils.isCoveringFace((TrapDoor) adjacent.getBlockData(), face)) {
                         serve = ServePolicy.REVERSED;

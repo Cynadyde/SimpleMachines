@@ -1,8 +1,8 @@
 package me.cynadyde.simplemachines.machine;
 
 import me.cynadyde.simplemachines.SimpleMachinesPlugin;
-import me.cynadyde.simplemachines.util.RandomPermuteIterator;
 import me.cynadyde.simplemachines.transfer.*;
+import me.cynadyde.simplemachines.util.RandomPermuteIterator;
 import org.bukkit.block.BlockState;
 import org.bukkit.block.Hopper;
 import org.bukkit.entity.Entity;
@@ -70,14 +70,12 @@ public class TrapdoorFilter implements Listener {
             tileEntityHopperSetCooldownMethod.setAccessible(true);
         }
         catch (ClassNotFoundException | NoSuchFieldException | NoSuchMethodException ex) {
-            plugin.getLogger().severe("could not perform reflection: " + ex.getMessage());
+            plugin.getLogger().severe("could not perform reflection due to" + ex.getClass().getName() + ": " + ex.getMessage());
         }
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onInventoryPickupItem(InventoryPickupItemEvent event) {
-
-        if (event.isCancelled()) return;
 
         final Inventory dest = event.getInventory();
         TransferDestPolicy destPolicy = TransferDestPolicy.ofInventory(dest);
@@ -133,8 +131,6 @@ public class TrapdoorFilter implements Listener {
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onInventoryMoveItem(InventoryMoveItemEvent event) {
 
-        if (event.isCancelled()) return;
-
         final Inventory source = event.getSource();
         final Inventory dest = event.getDestination();
 
@@ -183,7 +179,7 @@ public class TrapdoorFilter implements Listener {
                 slot = (size - 1) - slot;
             }
             ItemStack current = source.getItem(slot);
-            if (current != null && (output != OutputPolicy.MIN_ONE || current.getAmount() > 1 || current.getMaxStackSize() <= 1)) {
+            if (output.test(current)) {
 
                 ItemStack transfer = current.clone();
 
@@ -252,7 +248,7 @@ public class TrapdoorFilter implements Listener {
         Iterator<Integer> slots;
 
         // try to complete existing stacks in the inventory...
-        if (leftovers > 0 && input != InputPolicy.MAX_ONE) {
+        if (leftovers > 0 && input != InputPolicy.TO_EMPTY) {
 
             slots = retrieve == RetrievePolicy.RANDOM
                     ? new RandomPermuteIterator(0, size)
@@ -283,7 +279,7 @@ public class TrapdoorFilter implements Listener {
             }
         }
         // otherwise try to begin a new stack in the inventory...
-        if (leftovers > 0 && input != InputPolicy.LOCK_EMPTY) {
+        if (leftovers > 0 && input != InputPolicy.TO_NONEMPTY) {
 
             slots = retrieve == RetrievePolicy.RANDOM
                     ? new RandomPermuteIterator(0, size)
@@ -354,7 +350,7 @@ public class TrapdoorFilter implements Listener {
             tileEntityHopperSetCooldownMethod.invoke(tileEntityField.get(hopper), cooldown);
         }
         catch (IllegalAccessException | InvocationTargetException | NullPointerException ex) {
-            plugin.getLogger().severe("could not perform Hopper reflection: " + ex.getMessage());
+            plugin.getLogger().severe("could not perform Hopper reflection due to " + ex.getClass().getName() + ": " + ex.getMessage());
         }
     }
 

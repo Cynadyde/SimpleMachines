@@ -30,6 +30,9 @@ public class Utils {
     public static final List<BlockFace> FACES = Collections.unmodifiableList(Arrays.asList(
             BlockFace.NORTH, BlockFace.EAST, BlockFace.SOUTH, BlockFace.WEST, BlockFace.UP, BlockFace.DOWN));
 
+    /**
+     * A list of every tool that can speed up destroying some blocks.
+     */
     public static final List<Material> TOOLS = Collections.unmodifiableList(Arrays.asList(
             Material.WOODEN_PICKAXE, Material.STONE_PICKAXE, Material.IRON_PICKAXE, Material.GOLDEN_PICKAXE, Material.DIAMOND_PICKAXE, Material.NETHERITE_PICKAXE,
             Material.WOODEN_AXE, Material.STONE_AXE, Material.IRON_AXE, Material.GOLDEN_AXE, Material.DIAMOND_AXE, Material.NETHERITE_AXE,

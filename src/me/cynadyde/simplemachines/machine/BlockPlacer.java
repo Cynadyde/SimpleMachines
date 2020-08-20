@@ -2,37 +2,36 @@ package me.cynadyde.simplemachines.machine;
 
 import me.cynadyde.simplemachines.SimpleMachinesPlugin;
 import me.cynadyde.simplemachines.util.RandomPermuteIterator;
-import me.cynadyde.simplemachines.util.Utils;
+import org.bukkit.Effect;
 import org.bukkit.Material;
-import org.bukkit.Sound;
-import org.bukkit.block.*;
+import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
+import org.bukkit.block.BlockState;
+import org.bukkit.block.Dropper;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.block.data.Directional;
 import org.bukkit.block.data.Rotatable;
 import org.bukkit.block.data.Waterlogged;
-import org.bukkit.craftbukkit.v1_16_R1.block.CraftBlock;
-import org.bukkit.craftbukkit.v1_16_R1.block.CraftBlockEntityState;
-import org.bukkit.craftbukkit.v1_16_R1.block.CraftBlockState;
-import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockDispenseEvent;
+import org.bukkit.event.inventory.InventoryMoveItemEvent;
+import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.BlockStateMeta;
-import org.bukkit.material.MaterialData;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.Iterator;
 
 public class BlockPlacer implements Listener {
 
     private final SimpleMachinesPlugin plugin;
 
-    private Method obcCraftBlockGetNMS;
-    private Method nmsIBlockDataGetStepSound;
-    private Method nmsSoundEffectTypeGetPlaceSound;
-    private Field nmsSoundEffectKey;
+    private Class<?> obcCraftBlockEntityState;
+    private Method obcCraftBlockEntityStateApplyTo;
+    private Field obcCraftBlockEntityStateTileEntity;
 
     public BlockPlacer(SimpleMachinesPlugin plugin) {
         this.plugin = plugin;
@@ -42,20 +41,17 @@ public class BlockPlacer implements Listener {
 
             String version = plugin.getServer().getClass().getPackage().getName().split("\\.")[3];
 
-            Class<?> obcCraftBlock = Class.forName("org.bukkit.craftbukkit." + version + ".block.CraftBlock");
-            Class<?> nmsIBlockData = Class.forName("net.minecraft.server." + version + ".BlockBase.BlockData");
-            Class<?> nmsSoundEffectType = Class.forName("net.minecraft.server." + version + ".SoundEffectType");
-            Class<?> nmsSoundEffect = Class.forName("net.minecraft.server." + version + ".SoundEffect");
+            Class<?> nmsTileEntity = Class.forName("net.minecraft.server." + version + ".TileEntity");
+            obcCraftBlockEntityState = Class.forName("org.bukkit.craftbukkit." + version + ".block.CraftBlockEntityState");
 
-            obcCraftBlockGetNMS = obcCraftBlock.getDeclaredMethod("getNMS");
-            nmsIBlockDataGetStepSound = nmsIBlockData.getDeclaredMethod("getStepSound");
-            nmsSoundEffectTypeGetPlaceSound = nmsSoundEffectType.getDeclaredMethod("e");
-            nmsSoundEffectKey = nmsSoundEffect.getDeclaredField("b");
+            obcCraftBlockEntityStateApplyTo = obcCraftBlockEntityState.getDeclaredMethod("applyTo", nmsTileEntity);
+            obcCraftBlockEntityStateTileEntity = obcCraftBlockEntityState.getDeclaredField("tileEntity");
 
-            nmsSoundEffectKey.setAccessible(true);
+            obcCraftBlockEntityStateApplyTo.setAccessible(true);
+            obcCraftBlockEntityStateTileEntity.setAccessible(true);
         }
         catch (NoSuchMethodException | NoSuchFieldException | ClassNotFoundException ex) {
-            plugin.getLogger().severe("could not perform reflection: " + ex.getMessage());
+            plugin.getLogger().severe("could not perform reflection due to " + ex.getClass().getName() + ": " + ex.getMessage());
         }
     }
 
@@ -69,13 +65,24 @@ public class BlockPlacer implements Listener {
         }
     }
 
+    @EventHandler
+    public void onInventoryMoveItem(InventoryMoveItemEvent event) {
+        InventoryHolder holder = event.getSource().getHolder();
+        if (holder instanceof BlockState) {
+
+            final Block machine = ((BlockState) holder).getBlock();
+            if (isBlockPlacingMachine(machine)) {
+                event.setCancelled(true);
+                plugin.getServer().getScheduler().runTaskLater(plugin, () -> doBlockPlace(machine), 0L);
+            }
+        }
+    }
+
     public boolean isBlockPlacingMachine(Block block) {
         if (block.getType() == Material.DROPPER) {
             Block part = block.getRelative(BlockFace.UP);
-            if (part.getType() == Material.PISTON
-                    && ((Directional) part.getBlockData()).getFacing() == BlockFace.DOWN) {
-                return true;
-            }
+            return part.getType() == Material.PISTON
+                    && ((Directional) part.getBlockData()).getFacing() == BlockFace.DOWN;
         }
         return false;
     }
@@ -84,7 +91,9 @@ public class BlockPlacer implements Listener {
         if (isBlockPlacingMachine(machine)) {
 
             Dropper dropper = (Dropper) machine.getState();
-            Block dest = machine.getRelative(BlockFace.UP, 2);
+            BlockFace facing = ((Directional) dropper.getBlockData()).getFacing();
+
+            Block dest = machine.getRelative(facing, 1);
             if (dest.getType().isAir() || dest.isLiquid()) {
 
                 boolean waterlogged = dest.getType() == Material.WATER;
@@ -92,7 +101,7 @@ public class BlockPlacer implements Listener {
                 // find the next block to place, if any...
                 int slot = -1;
                 ItemStack[] contents = dropper.getInventory().getContents();
-                RandomPermuteIterator iterator = new RandomPermuteIterator(0, contents.length);
+                Iterator<Integer> iterator = new RandomPermuteIterator(0, contents.length);
                 while (iterator.hasNext()) {
                     int i = iterator.next();
                     ItemStack item = contents[i];
@@ -103,58 +112,45 @@ public class BlockPlacer implements Listener {
                 }
                 if (slot != -1) {
                     ItemStack item = contents[slot];
-                    if (item.getItemMeta() instanceof BlockStateMeta) {
-                        copyStateToBlock(dest, ((BlockStateMeta) item.getItemMeta()).getBlockState());
-                    }
-                    else {
-                        dest.setType(item.getType());
-                    }
 
-                    BlockFace placeDir = ((Directional) dropper.getBlockData()).getFacing();
+                    // FIXME placed chest did not retain its contents
+
+                    dest.setType(item.getType());
                     BlockData destData = dest.getBlockData();
 
                     if (destData instanceof Directional) {
-                        ((Directional) destData).setFacing(placeDir.getOppositeFace());
+                        ((Directional) destData).setFacing(facing.getOppositeFace());
                     }
                     if (destData instanceof Rotatable) {
-                        ((Rotatable) destData).setRotation(placeDir);
+                        ((Rotatable) destData).setRotation(facing.getOppositeFace());
                     }
                     if (destData instanceof Waterlogged) {
                         ((Waterlogged) destData).setWaterlogged(waterlogged);
                     }
                     dest.setBlockData(destData);
-                    playBlockPlaceSound(dest);
+
+                    if (item.getItemMeta() instanceof BlockStateMeta) {
+                        BlockStateMeta itemMeta = (BlockStateMeta) item.getItemMeta();
+                        if (obcCraftBlockEntityState.isInstance(itemMeta.getBlockState())) {
+
+                            BlockState itemTile = itemMeta.getBlockState();
+                            BlockState destTile = dest.getState(); // item isinstance implies that dest isinstance too
+                            try {
+                                obcCraftBlockEntityStateApplyTo.invoke(itemTile, obcCraftBlockEntityStateTileEntity.get(destTile));
+                            }
+                            catch (IllegalAccessException | InvocationTargetException | NullPointerException | ClassCastException ex) {
+                                plugin.getLogger().severe("could not perform TileEntity applyTo reflection due to " + ex.getClass().getName() + ": " + ex.getMessage());
+                            }
+                            destTile.update(true, true);
+                        }
+                    }
+                    dest.getWorld().playEffect(dest.getLocation().add(0.5, 0.5, 0.5), Effect.STEP_SOUND, dest.getType());
+
+                    ItemStack altered = item.clone();
+                    altered.setAmount(item.getAmount() - 1);
+                    dropper.getInventory().setItem(slot, altered);
                 }
             }
-        }
-    }
-
-    public void copyStateToBlock(Block dest, BlockState data) {
-//        dest.setType(item.getType());
-//
-//        if (item.getItemMeta() instanceof TileState) {
-//            CraftBlockEntityState<?> state = (CraftBlockEntityState<?>) dest.getState();
-//            BlockStateMeta meta = (BlockStateMeta) item.getItemMeta();
-//            BlockState tile = meta.getBlockState();
-//
-//
-//
-//        }
-    }
-
-    public void playBlockPlaceSound(Block block) {
-        try {
-            Object o = block;
-            o = obcCraftBlockGetNMS.invoke(o);
-            o = nmsIBlockDataGetStepSound.invoke(o);
-            o = nmsSoundEffectTypeGetPlaceSound.invoke(o);
-            o = nmsSoundEffectKey.get(o);
-
-            String key = o.toString(); /*((CraftBlock) block).getNMS().getStepSound().e().b.toString();*/
-            block.getWorld().playSound(block.getLocation().add(0.5, 0.5, 0.5), key, 1.0F, 1.0F);
-        }
-        catch (IllegalAccessException | InvocationTargetException ex) {
-            plugin.getLogger().severe("could not perform block SoundEffectType reflection: " + ex.getMessage());
         }
     }
 }

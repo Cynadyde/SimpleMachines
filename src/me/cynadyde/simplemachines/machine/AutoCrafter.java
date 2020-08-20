@@ -7,10 +7,12 @@ import me.cynadyde.simplemachines.util.Utils;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
+import org.bukkit.block.BlockState;
 import org.bukkit.block.Dropper;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockDispenseEvent;
+import org.bukkit.event.inventory.InventoryMoveItemEvent;
 import org.bukkit.inventory.*;
 
 import java.util.*;
@@ -18,7 +20,7 @@ import java.util.stream.Collectors;
 
 public class AutoCrafter implements Listener {
 
-    private final Map<List<ItemStack>, Recipe> recipeCache;
+    private final Map<List<ItemStack>, Recipe> recipeCache; // this is never emptied...
     private final SimpleMachinesPlugin plugin;
 
     public AutoCrafter(SimpleMachinesPlugin plugin) {
@@ -38,6 +40,20 @@ public class AutoCrafter implements Listener {
         }
     }
 
+    @EventHandler
+    public void onInventoryMoveItem(InventoryMoveItemEvent event) {
+        InventoryHolder holder = event.getSource().getHolder();
+        if (holder instanceof BlockState) {
+
+            final Block machine = ((BlockState) holder).getBlock();
+            if (isAutoCrafterMachine(machine)) {
+                event.setCancelled(true);
+
+                plugin.getServer().getScheduler().runTaskLater(plugin, () -> doAutoCraft(machine), 0L);
+            }
+        }
+    }
+
     public boolean isAutoCrafterMachine(Block block) {
         return block.getType() == Material.DROPPER
                 && block.getRelative(BlockFace.DOWN).getType() == Material.CRAFTING_TABLE;
@@ -45,9 +61,6 @@ public class AutoCrafter implements Listener {
 
     public void doAutoCraft(Block block) {
         if (isAutoCrafterMachine(block)) {
-
-            System.out.println("Doing auto craft! Hey!");
-
             Dropper dropper = ((Dropper) block.getState());
             OutputPolicy output = TransferSourcePolicy.ofInventory(dropper.getInventory()).OUTPUT;
 
@@ -55,14 +68,9 @@ public class AutoCrafter implements Listener {
             ItemStack[] ingredients = calcIngredients(contents, output);
             if (ingredients != null) {
 
-                System.out.println("Got these ingredients: " + Arrays.asList(ingredients));
-
                 Recipe recipe = getBestRecipeMatch(ingredients);
                 if (recipe != null) {
-
-                    System.out.println("Got this recipe: " + recipe);
                     ItemStack result = recipe.getResult();
-
                     Utils.dropFromDropper(dropper, result);
                     dropper.getInventory().setContents(calcLeftovers(contents, ingredients));
                 }
@@ -76,7 +84,7 @@ public class AutoCrafter implements Listener {
         }
 
         boolean notEmpty = false;
-        boolean keepOne = output == OutputPolicy.MIN_ONE;
+        boolean keepOne = output == OutputPolicy.FROM_NONSOLO;
         ItemStack[] ingredients = new ItemStack[contents.length];
 
         /* either everything is able to be pulled out or nothing will be...
@@ -120,9 +128,8 @@ public class AutoCrafter implements Listener {
     }
 
     public Recipe getBestRecipeMatch(ItemStack[] ingredients) {
-
-        /* yeah, bukkit doesn't seem to have a
-            method for this, so here we are... */
+        /* yeah, for some reason bukkit doesn't actually
+            have a method for this, so here it goes... */
         if (ingredients.length != 9) {
             throw new IllegalArgumentException("ingredients array must be of length 9");
         }

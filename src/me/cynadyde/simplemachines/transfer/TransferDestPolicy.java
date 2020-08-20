@@ -26,27 +26,27 @@ public class TransferDestPolicy {
         if (!container.isPlaced()) {
             return new TransferDestPolicy(RetrievePolicy.NORMAL, InputPolicy.NORMAL);
         }
-
         Block block = container.getBlock();
         RetrievePolicy retrieve = RetrievePolicy.NORMAL;
         InputPolicy input = InputPolicy.NORMAL;
 
         for (BlockFace face : Utils.FACES) {
             Block adjacent = block.getRelative(face);
+
             switch (adjacent.getType()) {
-                case ACACIA_TRAPDOOR:
-                    if (Utils.isCoveringFace((TrapDoor) adjacent.getBlockData(), face)) {
-                        retrieve = RetrievePolicy.REVERSED;
-                    }
-                    break;
                 case SPRUCE_TRAPDOOR:
                     if (Utils.isCoveringFace((TrapDoor) adjacent.getBlockData(), face)) {
-                        input = InputPolicy.MAX_ONE;
+                        input = InputPolicy.TO_EMPTY;
                     }
                     break;
                 case BIRCH_TRAPDOOR:
                     if (Utils.isCoveringFace((TrapDoor) adjacent.getBlockData(), face)) {
-                        input = InputPolicy.LOCK_EMPTY;
+                        input = InputPolicy.TO_NONEMPTY;
+                    }
+                    break;
+                case ACACIA_TRAPDOOR:
+                    if (Utils.isCoveringFace((TrapDoor) adjacent.getBlockData(), face)) {
+                        retrieve = RetrievePolicy.REVERSED;
                     }
                     break;
                 case WARPED_TRAPDOOR:
