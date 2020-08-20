@@ -1,6 +1,7 @@
 package me.cynadyde.simplemachines.machine;
 
 import me.cynadyde.simplemachines.SimpleMachinesPlugin;
+import me.cynadyde.simplemachines.util.RandomPermuteIterator;
 import me.cynadyde.simplemachines.util.Utils;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -19,9 +20,8 @@ import org.bukkit.inventory.meta.Damageable;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.util.BoundingBox;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 
 public class BlockBreaker implements Listener {
@@ -29,35 +29,9 @@ public class BlockBreaker implements Listener {
     private final SimpleMachinesPlugin plugin;
     private final Set<MiningJob> jobs;
 
-    Class<?> nmsItemToolMaterial;
-    Class<?> nmsItemShears;
-
-    Method nmsItemGetDestroySpeed;
-    Method nmsItemCanDestroySpecialBlock;
-
-    Field obcItemHandle;
-
     public BlockBreaker(SimpleMachinesPlugin plugin) {
         this.plugin = plugin;
         this.jobs = new HashSet<>();
-
-        try {
-            Class<?> obcItem = Class.forName("org.bukkit.craftbukkit.v1_16_R1.inventory.CraftItemStack");
-            Class<?> nmsItem = Class.forName("net.minecraft.server.v1_16_R1.Item");
-            Class<?> nmsItemStack = Class.forName("net.minecraft.server.v1_16_R1.ItemStack");
-            Class<?> nmsIBlockData = Class.forName("net.minecraft.server.v1_16_R1.IBlockData");
-
-            nmsItemToolMaterial = Class.forName("net.minecraft.server.v1_16_R1.ItemToolMaterial");
-            nmsItemShears = Class.forName("net.minecraft.server.v1_16_R1.ItemShears");
-
-            nmsItemGetDestroySpeed = nmsItem.getDeclaredMethod("getDestroySpeed", nmsItemStack, nmsIBlockData);
-            nmsItemCanDestroySpecialBlock = nmsItem.getDeclaredMethod("canDestroySpecialBlock", nmsIBlockData);
-
-            obcItemHandle = obcItem.getDeclaredField("handle");
-        }
-        catch (ClassNotFoundException | NoSuchMethodException | NoSuchFieldException ex) {
-            plugin.getLogger().severe("could not perform reflection: " + ex.getMessage());
-        }
     }
 
     @EventHandler
@@ -81,10 +55,11 @@ public class BlockBreaker implements Listener {
 
                 Dropper machine = job.getMachine();
                 if (isBlockBreakerMachine(machine.getBlock())) {
-                    Utils.dropFromDropper(machine, drop.getItemStack());
 
+                    Utils.dropFromDropper(machine, drop.getItemStack());
                     event.setCancelled(true);
                 }
+                break;
             }
         }
     }
@@ -104,7 +79,9 @@ public class BlockBreaker implements Listener {
                 // find the next tool stored in the dropper, if any...
                 int slot = -1;
                 ItemStack[] contents = dropper.getInventory().getContents();
-                for (int i = 0; i < contents.length; i++) {
+                RandomPermuteIterator iterator = new RandomPermuteIterator(0, contents.length);
+                while (iterator.hasNext()) {
+                    int i = iterator.next();
                     ItemStack item = contents[i];
                     if (item != null && Utils.TOOLS.contains(item.getType())) {
                         slot = i;
@@ -114,8 +91,7 @@ public class BlockBreaker implements Listener {
                 // a tool is required to break blocks...
                 if (slot != -1) {
                     ItemStack tool = contents[slot];
-                    ItemMeta meta = tool.getItemMeta();
-                    assert (meta instanceof Damageable);
+                    ItemMeta meta = Objects.requireNonNull(tool.getItemMeta()); // tool item meta is Damageable
 
                     if (target.breakNaturally(tool)) {
 
@@ -124,9 +100,18 @@ public class BlockBreaker implements Listener {
                         plugin.getServer().getScheduler().runTaskLater(plugin, () -> jobs.remove(job), 0L);
                         jobs.add(job);
 
-                        // the mining duration in quarter seconds is taken from the tool's durability
+                        // the block's hardness is factored into lost durability
                         int maxDamage = tool.getType().getMaxDurability();
-                        int damage = ((Damageable) meta).getDamage() + 1 + (getTicksToMine(target, tool) / 5);
+                        int damage = ((Damageable) meta).getDamage();
+                        damage += Math.max(1, Math.ceil(target.getType().getHardness()));
+                        double chance = 1.0 / (meta.getEnchantLevel(Enchantment.DURABILITY) + 1);
+                        if (chance < 1.0) {
+                            for (int i = 0; i < damage; i++) {
+                                if (Utils.RNG.nextDouble() >= chance) {
+                                    damage -= 1;
+                                }
+                            }
+                        }
                         if (damage <= maxDamage) {
                             ((Damageable) meta).setDamage(damage);
                             tool.setItemMeta(meta);
@@ -143,43 +128,7 @@ public class BlockBreaker implements Listener {
     }
 
     public boolean isBreakable(Block block) {
-        return !block.isLiquid() && !block.getType().isAir() && !(block.getType().getHardness() < 0);
-    }
-
-    public int getTicksToMine(Block block, ItemStack tool) {
-
-        boolean appropriateTool = canToolHarvest(block, tool);
-        boolean preferredTool = isToolEfficient(block, tool);
-
-        double seconds = block.getType().getHardness() * (appropriateTool ? 1.5 : 5.0);
-
-        if (preferredTool) {
-            double multiplier = getToolDigMultiplier(tool);
-            ItemMeta meta = tool.getItemMeta();
-            if (meta != null) {
-                int efficiency = meta.getEnchantLevel(Enchantment.DIG_SPEED);
-                if (efficiency > 0) {
-                    multiplier += Math.pow(efficiency, 2) + 1;
-                }
-            }
-            seconds /= multiplier;
-        }
-        return (int) Math.round(seconds * 20);
-    }
-
-    public boolean canToolHarvest(Block block, ItemStack tool) {
-        // TODO
-        return false;
-    }
-
-    public boolean isToolEfficient(Block block, ItemStack tool) {
-        // TODO
-        return false;
-    }
-
-    public double getToolDigMultiplier(ItemStack tool) {
-        // TODO
-        return 1.0D;
+        return !block.getType().isAir() && !block.isLiquid() && block.getType().getHardness() >= 0;
     }
 
     public static class MiningJob {

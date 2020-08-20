@@ -18,12 +18,10 @@ import java.util.stream.Collectors;
 
 public class AutoCrafter implements Listener {
 
-    private final Random random;
     private final Map<List<ItemStack>, Recipe> recipeCache;
     private final SimpleMachinesPlugin plugin;
 
     public AutoCrafter(SimpleMachinesPlugin plugin) {
-        this.random = new Random();
         this.recipeCache = new HashMap<>();
         this.plugin = plugin;
     }
