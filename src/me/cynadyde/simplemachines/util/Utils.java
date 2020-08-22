@@ -45,6 +45,24 @@ public class Utils {
     ));
 
     /**
+     * A list of all bucket materials except the empty bucket.
+     */
+    public static final List<Material> FILLED_BUCKETS = Collections.unmodifiableList(Arrays.asList(
+            Material.WATER_BUCKET, Material.LAVA_BUCKET, Material.MILK_BUCKET,
+            Material.COD_BUCKET, Material.SALMON_BUCKET, Material.TROPICAL_FISH_BUCKET, Material.PUFFERFISH_BUCKET
+    ));
+
+    /**
+     * A list of all bucket materials.
+     */
+    public static final List<Material> BUCKETS;
+    static {
+        List<Material> buckets = new ArrayList<>(FILLED_BUCKETS);
+        buckets.add(Material.BUCKET);
+        BUCKETS = Collections.unmodifiableList(buckets);
+    }
+
+    /**
      * Tests if the given trapdoor is covering the given face.
      */
     public static boolean isCoveringFace(TrapDoor trapdoor, BlockFace face) {

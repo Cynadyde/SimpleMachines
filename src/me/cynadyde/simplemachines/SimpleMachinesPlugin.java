@@ -1,6 +1,6 @@
 package me.cynadyde.simplemachines;
 
-import me.cynadyde.simplemachines.gui.ItemFilterGui;
+import me.cynadyde.simplemachines.gui.ItemTransfererGui;
 import me.cynadyde.simplemachines.machine.*;
 import me.cynadyde.simplemachines.util.PluginKey;
 import org.bukkit.block.Block;
@@ -16,8 +16,8 @@ public class SimpleMachinesPlugin extends JavaPlugin implements Listener {
     public Block target = null;  // debug purposes
 
     private AutoCrafter autoCrafterModule;
-    private ItemFilter itemFilterModule;
-    private ItemFilterGui itemFilterGuiModule;
+    private ItemTransferer itemTransfererModule;
+    private ItemTransfererGui itemTransfererGuiModule;
     private BlockBreaker blockBreakerModule;
     private BlockPlacer blockPlacerModule;
     private RedstoneClock redstoneClockModule;
@@ -27,8 +27,8 @@ public class SimpleMachinesPlugin extends JavaPlugin implements Listener {
         PluginKey.refresh(this);
 
         getServer().getPluginManager().registerEvents(autoCrafterModule = new AutoCrafter(this), this);
-        getServer().getPluginManager().registerEvents(itemFilterModule = new ItemFilter(this), this);
-        getServer().getPluginManager().registerEvents(itemFilterGuiModule = new ItemFilterGui(this), this);
+        getServer().getPluginManager().registerEvents(itemTransfererModule = new ItemTransferer(this), this);
+        getServer().getPluginManager().registerEvents(itemTransfererGuiModule = new ItemTransfererGui(this), this);
         getServer().getPluginManager().registerEvents(blockBreakerModule = new BlockBreaker(this), this);
         getServer().getPluginManager().registerEvents(blockPlacerModule = new BlockPlacer(this), this);
         getServer().getPluginManager().registerEvents(redstoneClockModule = new RedstoneClock(this), this);
@@ -36,7 +36,7 @@ public class SimpleMachinesPlugin extends JavaPlugin implements Listener {
 
     @Override
     public void onDisable() {
-        itemFilterGuiModule.closeAllGuis();
+        itemTransfererGuiModule.closeAllGuis();
     }
 
     @Override

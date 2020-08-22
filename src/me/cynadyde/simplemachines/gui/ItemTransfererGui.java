@@ -2,7 +2,6 @@ package me.cynadyde.simplemachines.gui;
 
 import me.cynadyde.simplemachines.SimpleMachinesPlugin;
 import me.cynadyde.simplemachines.transfer.*;
-import me.cynadyde.simplemachines.util.PluginKey;
 import me.cynadyde.simplemachines.util.Utils;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -19,13 +18,13 @@ import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryView;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.persistence.PersistentDataContainer;
-import org.bukkit.persistence.PersistentDataType;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
 
-public class ItemFilterGui implements Listener {
+public class ItemTransfererGui implements Listener {
 
     private final SimpleMachinesPlugin plugin;
     private final Map<Block, Window> guis;
@@ -34,6 +33,7 @@ public class ItemFilterGui implements Listener {
     private final int slotI = 12;
     private final int slotS = 13;
     private final int slotO = 14;
+    private final int slotL = 15;
 
     private final ItemStack gui1 = Utils.createGuiItem(Material.BLACK_STAINED_GLASS_PANE, " ", "");
     private final ItemStack gui2 = Utils.createGuiItem(Material.WHITE_STAINED_GLASS_PANE, " ", "");
@@ -66,13 +66,19 @@ public class ItemFilterGui implements Listener {
             "§fOAK       §8->§b  Output.FROM_SOLO",
             "§fDARK OAK  §8->§b  Output.FROM_NONSOLO"
     );
+    private final ItemStack guiL = Utils.createGuiItem(
+            Material.JUNGLE_SIGN, "§2Liquids Policy",
+            "§ePlace one of the following trapdoors",
+            "§e to change how buckets are transferred.",
+            "§fIRON  §8->§b  Liquids.FLOW"
+    );
 
-    public ItemFilterGui(SimpleMachinesPlugin plugin) {
+    public ItemTransfererGui(SimpleMachinesPlugin plugin) {
         this.plugin = plugin;
         this.guis = new HashMap<>();
     }
 
-    @EventHandler
+    @EventHandler(ignoreCancelled = true)
     public void onPlayerInteract(PlayerInteractEvent event) {
         if (event.getClickedBlock() != null
                 && event.getAction() == Action.RIGHT_CLICK_BLOCK
@@ -96,7 +102,7 @@ public class ItemFilterGui implements Listener {
         }
     }
 
-    @EventHandler
+    @EventHandler(ignoreCancelled = true)
     public void onInventoryClick(InventoryClickEvent event) {
         if (event.getView() instanceof Window) {
 
@@ -119,14 +125,14 @@ public class ItemFilterGui implements Listener {
         }
     }
 
-    @EventHandler
+    @EventHandler(ignoreCancelled = true)
     public void onInventoryDrag(InventoryDragEvent event) {
         if (event.getView() instanceof Window) {
             event.setCancelled(true);
         }
     }
 
-    @EventHandler
+    @EventHandler(ignoreCancelled = true)
     public void onInventoryClose(InventoryCloseEvent event) {
         if (event.getView() instanceof Window) {
             Window gui = (Window) event.getView();
@@ -136,14 +142,10 @@ public class ItemFilterGui implements Listener {
             InputPolicy input = Objects.requireNonNull(InputPolicy.fromToken(Utils.getMaterial(gui.view.getItem(slotI))));
             ServePolicy serve = Objects.requireNonNull(ServePolicy.fromToken(Utils.getMaterial(gui.view.getItem(slotS))));
             OutputPolicy output = Objects.requireNonNull(OutputPolicy.fromToken(Utils.getMaterial(gui.view.getItem(slotO))));
+            LiquidsPolicy liquids = Objects.requireNonNull(LiquidsPolicy.fromToken(Utils.getMaterial(gui.view.getItem(slotL))));
 
-            PersistentDataContainer pdc = gui.getContainer().getPersistentDataContainer();
-            pdc.set(PluginKey.RECEIVE_POLICY.get(), PersistentDataType.BYTE, (byte) retrieve.ordinal());
-            pdc.set(PluginKey.INPUT_POLICY.get(), PersistentDataType.BYTE, (byte) input.ordinal());
-            pdc.set(PluginKey.SERVE_POLICY.get(), PersistentDataType.BYTE, (byte) serve.ordinal());
-            pdc.set(PluginKey.OUTPUT_POLICY.get(), PersistentDataType.BYTE, (byte) output.ordinal());
-
-            gui.getContainer().update(false);
+            TransferScheme scheme = new TransferScheme(retrieve, input, serve, output, liquids);
+            scheme.applyTo(gui.getContainer());
         }
     }
 
@@ -160,6 +162,7 @@ public class ItemFilterGui implements Listener {
             case slotI: return token == null || InputPolicy.fromToken(token) != null;
             case slotS: return token == null || ServePolicy.fromToken(token) != null;
             case slotO: return token == null || OutputPolicy.fromToken(token) != null;
+            case slotL: return token == null || LiquidsPolicy.fromToken(token) != null;
         }
         return false;
     }
@@ -179,8 +182,8 @@ public class ItemFilterGui implements Listener {
             this.view = Bukkit.createInventory(viewer, 2 * 9, getTitle());
 
             view.setContents(new ItemStack[] {
-                    gui1, gui1, guiR, guiI, guiS, guiO, gui1, gui1, gui1,
-                    gui2, gui2, null, null, null, null, gui2, gui2, gui2
+                    gui1, gui1, guiR, guiI, guiS, guiO, guiL, gui1, gui1,
+                    gui2, gui2, null, null, null, null, null, gui2, gui2
             });
 
             TransferScheme scheme = TransferScheme.ofContainer(container);
@@ -189,6 +192,7 @@ public class ItemFilterGui implements Listener {
             view.setItem(slotI, new ItemStack(scheme.INPUT.getToken()));
             view.setItem(slotS, new ItemStack(scheme.SERVE.getToken()));
             view.setItem(slotO, new ItemStack(scheme.OUTPUT.getToken()));
+            view.setItem(slotL, new ItemStack(scheme.LIQUIDS.getToken()));
         }
 
         public Container getContainer() {

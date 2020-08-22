@@ -2,6 +2,7 @@ package me.cynadyde.simplemachines.machine;
 
 import me.cynadyde.simplemachines.SimpleMachinesPlugin;
 import me.cynadyde.simplemachines.util.RandomPermuteIterator;
+import me.cynadyde.simplemachines.util.ReflectiveUtils;
 import me.cynadyde.simplemachines.util.Utils;
 import org.bukkit.Effect;
 import org.bukkit.Material;
@@ -20,9 +21,6 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.Damageable;
 import org.bukkit.inventory.meta.ItemMeta;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.util.Iterator;
 import java.util.Objects;
 
@@ -30,38 +28,8 @@ public class BlockBreaker implements Listener {
 
     private final SimpleMachinesPlugin plugin;
 
-    private Class<?> obcCraftItemStack;
-    private Class<?> obcCraftBlock;
-
-    private Field obcCraftItemStackHandle;
-    private Method nmsItemStackGetItem;
-    private Method nmsItemGetDestroySpeed;
-    private Method obcCraftBlockGetNMS;
-
     public BlockBreaker(SimpleMachinesPlugin plugin) {
         this.plugin = plugin;
-
-        try {
-            // get necessary classes depending on current MC version in use
-
-            String version = plugin.getServer().getClass().getPackage().getName().split("\\.")[3];
-
-            obcCraftItemStack = Class.forName("org.bukkit.craftbukkit." + version + ".inventory.CraftItemStack");
-            obcCraftBlock = Class.forName("org.bukkit.craftbukkit." + version + ".block.CraftBlock");
-            Class<?> nmsItemStack = Class.forName("net.minecraft.server." + version + ".ItemStack");
-            Class<?> nmsItem = Class.forName("net.minecraft.server." + version + ".Item");
-            Class<?> nmsIBlockData = Class.forName("net.minecraft.server." + version + ".IBlockData");
-
-            obcCraftItemStackHandle = obcCraftItemStack.getDeclaredField("handle");
-            nmsItemStackGetItem = nmsItemStack.getDeclaredMethod("getItem");
-            nmsItemGetDestroySpeed = nmsItem.getDeclaredMethod("getDestroySpeed", nmsItemStack, nmsIBlockData);
-            obcCraftBlockGetNMS = obcCraftBlock.getDeclaredMethod("getNMS");
-
-            obcCraftItemStackHandle.setAccessible(true);
-        }
-        catch (NoSuchMethodException | NoSuchFieldException | ClassNotFoundException ex) {
-            plugin.getLogger().severe("could not perform reflection due to " + ex.getClass().getName() + ": " + ex.getMessage());
-        }
     }
 
     @EventHandler
@@ -118,7 +86,7 @@ public class BlockBreaker implements Listener {
 
                     /* the block's hardness is factored into lost durability,
                         and a penalty is added if the incorrect tool is used */
-                    double factor = isPreferredTool(target, tool) ? 2.0 : 5.0;
+                    double factor = ReflectiveUtils.isPreferredTool(target, tool) ? 2.0 : 5.0;
                     float hardness = target.getType().getHardness();
 
                     int maxDamage = tool.getType().getMaxDurability();
@@ -153,24 +121,9 @@ public class BlockBreaker implements Listener {
         }
     }
 
-    public boolean isBreakable(Block block) {
+    private boolean isBreakable(Block block) {
         /* TODO it would be a good idea to allow this machine to be hooked into anti grief, somehow */
 
         return !block.getType().isAir() && !block.isLiquid() && block.getType().getHardness() >= 0;
-    }
-
-    public boolean isPreferredTool(Block block, ItemStack tool) {
-        if (obcCraftItemStack.isInstance(tool) && obcCraftBlock.isInstance(block)) {
-            try {
-                Object itemStack = obcCraftItemStackHandle.get(tool);
-                Object item = nmsItemStackGetItem.invoke(itemStack);
-                Object blockData = obcCraftBlockGetNMS.invoke(block);
-                return (float) nmsItemGetDestroySpeed.invoke(item, itemStack, blockData) > 1.0F;
-            }
-            catch (ClassCastException | IllegalAccessException | InvocationTargetException | NullPointerException ex) {
-                plugin.getLogger().severe("could not perform Item getDestroySpeed reflection due to " + ex.getClass().getName() + ": " + ex.getMessage());
-            }
-        }
-        return false;
     }
 }

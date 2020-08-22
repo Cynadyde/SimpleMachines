@@ -83,8 +83,32 @@ public class TransferScheme {
     }
 
     public void applyTo(Container container) {
-        if (container == null) {
-            throw new IllegalArgumentException("container cannot be null");
+        if (container != null) {
+            PersistentDataContainer pdc = container.getPersistentDataContainer();
+
+            byte r = (byte) RECEIVE.ordinal();
+            if (r > 0) pdc.set(PluginKey.RECEIVE_POLICY.get(), PersistentDataType.BYTE, r);
+            else pdc.remove(PluginKey.RECEIVE_POLICY.get());
+
+            byte i = (byte) INPUT.ordinal();
+            if (i > 0) pdc.set(PluginKey.INPUT_POLICY.get(), PersistentDataType.BYTE, i);
+            else pdc.remove(PluginKey.INPUT_POLICY.get());
+
+            byte s = (byte) SERVE.ordinal();
+            if (s > 0) pdc.set(PluginKey.SERVE_POLICY.get(), PersistentDataType.BYTE, s);
+            else pdc.remove(PluginKey.SERVE_POLICY.get());
+
+            byte o = (byte) OUTPUT.ordinal();
+            if (o > 0) pdc.set(PluginKey.OUTPUT_POLICY.get(), PersistentDataType.BYTE, o);
+            else pdc.remove(PluginKey.OUTPUT_POLICY.get());
+
+            byte l = (byte) LIQUIDS.ordinal();
+            if (l > 0) pdc.set(PluginKey.LIQUIDS_POLICY.get(), PersistentDataType.BYTE, l);
+            else pdc.remove(PluginKey.LIQUIDS_POLICY.get());
+
+            if (container.isPlaced()) {
+                container.update(false);
+            }
         }
     }
 }

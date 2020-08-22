@@ -2,6 +2,7 @@ package me.cynadyde.simplemachines.machine;
 
 import me.cynadyde.simplemachines.SimpleMachinesPlugin;
 import me.cynadyde.simplemachines.util.RandomPermuteIterator;
+import me.cynadyde.simplemachines.util.ReflectiveUtils;
 import org.bukkit.Effect;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
@@ -20,39 +21,14 @@ import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.BlockStateMeta;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.util.Iterator;
 
 public class BlockPlacer implements Listener {
 
     private final SimpleMachinesPlugin plugin;
 
-    private Class<?> obcCraftBlockEntityState;
-    private Method obcCraftBlockEntityStateApplyTo;
-    private Field obcCraftBlockEntityStateTileEntity;
-
     public BlockPlacer(SimpleMachinesPlugin plugin) {
         this.plugin = plugin;
-
-        try {
-            // get necessary classes depending on current MC version in use
-
-            String version = plugin.getServer().getClass().getPackage().getName().split("\\.")[3];
-
-            Class<?> nmsTileEntity = Class.forName("net.minecraft.server." + version + ".TileEntity");
-            obcCraftBlockEntityState = Class.forName("org.bukkit.craftbukkit." + version + ".block.CraftBlockEntityState");
-
-            obcCraftBlockEntityStateApplyTo = obcCraftBlockEntityState.getDeclaredMethod("applyTo", nmsTileEntity);
-            obcCraftBlockEntityStateTileEntity = obcCraftBlockEntityState.getDeclaredField("tileEntity");
-
-            obcCraftBlockEntityStateApplyTo.setAccessible(true);
-            obcCraftBlockEntityStateTileEntity.setAccessible(true);
-        }
-        catch (NoSuchMethodException | NoSuchFieldException | ClassNotFoundException ex) {
-            plugin.getLogger().severe("could not perform reflection due to " + ex.getClass().getName() + ": " + ex.getMessage());
-        }
     }
 
     @EventHandler
@@ -113,8 +89,6 @@ public class BlockPlacer implements Listener {
                 if (slot != -1) {
                     ItemStack item = contents[slot];
 
-                    // FIXME placed chest did not retain its contents
-
                     dest.setType(item.getType());
                     BlockData destData = dest.getBlockData();
 
@@ -131,18 +105,7 @@ public class BlockPlacer implements Listener {
 
                     if (item.getItemMeta() instanceof BlockStateMeta) {
                         BlockStateMeta itemMeta = (BlockStateMeta) item.getItemMeta();
-                        if (obcCraftBlockEntityState.isInstance(itemMeta.getBlockState())) {
-
-                            BlockState itemTile = itemMeta.getBlockState();
-                            BlockState destTile = dest.getState(); // item isinstance implies that dest isinstance too
-                            try {
-                                obcCraftBlockEntityStateApplyTo.invoke(itemTile, obcCraftBlockEntityStateTileEntity.get(destTile));
-                            }
-                            catch (IllegalAccessException | InvocationTargetException | NullPointerException | ClassCastException ex) {
-                                plugin.getLogger().severe("could not perform TileEntity applyTo reflection due to " + ex.getClass().getName() + ": " + ex.getMessage());
-                            }
-                            destTile.update(true, true);
-                        }
+                        ReflectiveUtils.copyBlockState(dest.getState(), itemMeta.getBlockState());
                     }
                     dest.getWorld().playEffect(dest.getLocation().add(0.5, 0.5, 0.5), Effect.STEP_SOUND, dest.getType());
 

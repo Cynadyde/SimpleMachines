@@ -2,7 +2,8 @@ package me.cynadyde.simplemachines.machine;
 
 import me.cynadyde.simplemachines.SimpleMachinesPlugin;
 import me.cynadyde.simplemachines.transfer.OutputPolicy;
-import me.cynadyde.simplemachines.transfer.TransferSourcePolicy;
+import me.cynadyde.simplemachines.transfer.TransferScheme;
+import me.cynadyde.simplemachines.util.ReflectiveUtils;
 import me.cynadyde.simplemachines.util.Utils;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
@@ -62,7 +63,7 @@ public class AutoCrafter implements Listener {
     public void doAutoCraft(Block block) {
         if (isAutoCrafterMachine(block)) {
             Dropper dropper = ((Dropper) block.getState());
-            OutputPolicy output = TransferSourcePolicy.ofInventory(dropper.getInventory()).OUTPUT;
+            OutputPolicy output = TransferScheme.ofInventory(dropper.getInventory()).OUTPUT;
 
             ItemStack[] contents = dropper.getInventory().getContents();
             ItemStack[] ingredients = calcIngredients(contents, output);
@@ -106,11 +107,11 @@ public class AutoCrafter implements Listener {
         return notEmpty ? ingredients : null;
     }
 
-    public ItemStack[] calcLeftovers(ItemStack[] contents, ItemStack[] taken) {
+    public ItemStack[] calcLeftovers(ItemStack[] contents, ItemStack[] consumed) {
         if (contents.length != 9) {
             throw new IllegalArgumentException("contents array must be of length 9");
         }
-        if (taken.length != 9) {
+        if (consumed.length != 9) {
             throw new IllegalArgumentException("taken array must be of length 9");
         }
         ItemStack[] results = new ItemStack[contents.length];
@@ -119,8 +120,14 @@ public class AutoCrafter implements Listener {
             ItemStack c = contents[i];
             if (c != null && !c.getType().isAir() && c.getAmount() > 0) {
 
+                /* If a content item becomes a different item after crafting but the
+                    stack hasn't been depleted, the different item will be destroyed. */
                 ItemStack item = c.clone();
-                item.setAmount(item.getAmount() - (taken[i] == null ? 0 : taken[i].getAmount()));
+                int taken = consumed[i] == null ? 0 : consumed[i].getAmount();
+                item.setAmount(item.getAmount() - taken);
+                if (Utils.isEmpty(item)) {
+                    item = ReflectiveUtils.getCraftingRemainder(c);
+                }
                 results[i] = item;
             }
         }

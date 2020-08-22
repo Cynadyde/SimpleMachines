@@ -3,12 +3,12 @@ package me.cynadyde.simplemachines.machine;
 import me.cynadyde.simplemachines.SimpleMachinesPlugin;
 import me.cynadyde.simplemachines.transfer.*;
 import me.cynadyde.simplemachines.util.PluginKey;
-import me.cynadyde.simplemachines.util.RandomPermuteIterator;
+import me.cynadyde.simplemachines.util.ReflectiveUtils;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.block.BlockState;
 import org.bukkit.block.Container;
 import org.bukkit.block.Hopper;
-import org.bukkit.entity.Entity;
 import org.bukkit.entity.Item;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -22,63 +22,16 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.spigotmc.SpigotWorldConfig;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.util.Iterator;
-import java.util.stream.IntStream;
 
-// TODO liquids flow from bucket to bucket between containers
-
-public class ItemFilter implements Listener {
+public class ItemTransferer implements Listener {
 
     private final SimpleMachinesPlugin plugin;
     private InventoryMoveItemEvent lastSpammedInvMoveItemEvent;
 
-    private Field entityField; // the OBC hook into NMS
-    private Field entityWorldField; // the NMS world
-    private Field tileEntityField; // the OBC hook into NMS
-    private Field tileEntityWorldField; // the NMS world
-    private Field worldSpigotConfigField; // the NMS world's OBC spigot config
-    private Method tileEntityHopperSetCooldownMethod;
-
-    public ItemFilter(SimpleMachinesPlugin plugin) {
+    public ItemTransferer(SimpleMachinesPlugin plugin) {
         this.plugin = plugin;
         this.lastSpammedInvMoveItemEvent = null;
-
-        try {
-            // get necessary classes depending on current MC version in use
-
-            String version = plugin.getServer().getClass().getPackage().getName().split("\\.")[3];
-
-            Class<?> craftEntityClass = Class.forName("org.bukkit.craftbukkit." + version + ".entity.CraftEntity");
-            Class<?> craftBlockEntityStateClass = Class.forName("org.bukkit.craftbukkit." + version + ".block.CraftBlockEntityState");
-            Class<?> nmsWorldClass = Class.forName("net.minecraft.server." + version + ".World");
-            Class<?> nmsEntityClass = Class.forName("net.minecraft.server." + version + ".Entity");
-            Class<?> nmsTileEntityClass = Class.forName("net.minecraft.server." + version + ".TileEntity");
-            Class<?> nmsTileEntityHopperClass = Class.forName("net.minecraft.server." + version + ".TileEntityHopper");
-
-            // get the needed fields and methods
-
-            entityField = craftEntityClass.getDeclaredField("entity");
-            entityWorldField = nmsEntityClass.getDeclaredField("world");
-            tileEntityField = craftBlockEntityStateClass.getDeclaredField("tileEntity");
-            tileEntityWorldField = nmsTileEntityClass.getDeclaredField("world");
-            worldSpigotConfigField = nmsWorldClass.getField("spigotConfig");
-            tileEntityHopperSetCooldownMethod = nmsTileEntityHopperClass.getDeclaredMethod("setCooldown", int.class);
-
-            // make sure the fields and methods are accessible
-
-            entityField.setAccessible(true);
-            entityWorldField.setAccessible(true);
-            tileEntityField.setAccessible(true);
-            tileEntityWorldField.setAccessible(true);
-            worldSpigotConfigField.setAccessible(true);
-            tileEntityHopperSetCooldownMethod.setAccessible(true);
-        }
-        catch (ClassNotFoundException | NoSuchFieldException | NoSuchMethodException ex) {
-            plugin.getLogger().severe("could not perform reflection due to" + ex.getClass().getName() + ": " + ex.getMessage());
-        }
     }
 
     @EventHandler(ignoreCancelled = true)
@@ -105,25 +58,24 @@ public class ItemFilter implements Listener {
                 pdc.remove(PluginKey.INPUT_POLICY.get());
                 pdc.remove(PluginKey.SERVE_POLICY.get());
                 pdc.remove(PluginKey.OUTPUT_POLICY.get());
+                pdc.remove(PluginKey.LIQUIDS_POLICY.get());
 
                 state.update();
-
             }
         }
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onInventoryPickupItem(InventoryPickupItemEvent event) {
-
         final Inventory dest = event.getInventory();
-        TransferScheme destPolicy = TransferScheme.ofInventory(dest);
+        TransferScheme scheme = TransferScheme.ofInventory(dest);
 
-        boolean takeover = destPolicy.isNonNormal();
+        boolean takeover = scheme.isNonNormal();
 
         if (takeover) {
             final Item s = event.getItem();
-            final ReceivePolicy r = destPolicy.RECEIVE;
-            final InputPolicy i = destPolicy.INPUT;
+            final ReceivePolicy r = scheme.RECEIVE;
+            final InputPolicy i = scheme.INPUT;
 
             /* cancel and mimic the event with all the needed control. */
             event.setCancelled(true);
@@ -134,15 +86,6 @@ public class ItemFilter implements Listener {
 
     @EventHandler(priority = EventPriority.LOWEST)
     public void onSpammedInventoryMoveItem(InventoryMoveItemEvent event) {
-
-        if (isTargeted(event.getSource())) {
-            System.out.println("caught InventoryMoveItemEvent...");
-            System.out.println(" source: " + event.getSource());
-            System.out.println(" dest: " + event.getDestination());
-            System.out.println(" source initiated? " + (event.getInitiator() == event.getSource()));
-            System.out.println(" item: " + event.getItem());
-        }
-
         /* prevent hoppers from immediately trying to pull items from
                another container again when the event is cancelled. */
         if (event.getDestination() == event.getInitiator()) {
@@ -165,7 +108,7 @@ public class ItemFilter implements Listener {
                     lastSpammedInvMoveItemEvent = null;
                     if (dest instanceof Hopper) {
                         int interval = getHopperTransferInterval(dest);
-                        setHopperCooldown((Hopper) dest, interval);
+                        ReflectiveUtils.setHopperCooldown((Hopper) dest, interval);
                     }
                 };
                 /* this is run once all the spammed events have been fired for the tick. */
@@ -176,7 +119,6 @@ public class ItemFilter implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onInventoryMoveItem(InventoryMoveItemEvent event) {
-
         final Inventory source = event.getSource();
         final Inventory dest = event.getDestination();
 
@@ -191,40 +133,34 @@ public class ItemFilter implements Listener {
                could just be a partial amount due to too few slot contents to take. */
             final int amount = getHopperTransferAmount(source.getHolder());
 
-            final boolean si = event.getInitiator() == event.getSource();
+            final boolean pushed = event.getInitiator() == event.getSource();
             final ServePolicy s = scheme.SERVE;
             final OutputPolicy o = scheme.OUTPUT;
             final ReceivePolicy r = scheme.RECEIVE;
             final InputPolicy i = scheme.INPUT;
+            final LiquidsPolicy l = scheme.LIQUIDS;
 
             /* now, mimic the event with all the needed control. */
-            Runnable task = () -> performItemTransfer(source, dest, amount, si, s, o, r, i);
+            Runnable task = () -> performItemTransfer(source, dest, amount, pushed, s, o, r, i, l);
             plugin.getServer().getScheduler().runTaskLater(plugin, task, 0L);
         }
     }
 
-    public void performItemTransfer(Inventory source, Inventory dest, int amount, boolean sourceInitiated,
-            ServePolicy serve, OutputPolicy output, ReceivePolicy retrieve, InputPolicy input) {
+    public void performItemTransfer(Inventory source, Inventory dest, int amount, boolean pushed,
+            ServePolicy serve, OutputPolicy output, ReceivePolicy receive, InputPolicy input, LiquidsPolicy liquids) {
 
         if (isTargeted(source, dest)) {
             System.out.println("++++++++++++++");
             System.out.println("SOURCE " + source.getType() + " has Serve." + serve + " and Output." + output);
-            System.out.println("DEST " + dest.getType() + " has Retrieve." + retrieve + " and Input." + input);
+            System.out.println("DEST " + dest.getType() + " has Retrieve." + receive + " and Input." + input);
         }
 
-        int size = source.getSize();
-        Iterator<Integer> slots = serve == ServePolicy.RANDOM
-                ? new RandomPermuteIterator(0, size)
-                : IntStream.range(0, size).iterator();
-
+        Iterator<Integer> slots = serve.getIterator(source.getSize());
         while (slots.hasNext()) {
-
             int slot = slots.next();
-            if (serve == ServePolicy.REVERSED) {
-                slot = (size - 1) - slot;
-            }
+
             ItemStack current = source.getItem(slot);
-            if (output.testSlot(current)) {
+            if (output.testSlot(current) && !liquids.isDrained(current)) {
 
                 ItemStack transfer = current.clone();
 
@@ -235,18 +171,24 @@ public class ItemFilter implements Listener {
                     System.out.println("TAKING " + transfer + " FROM SOURCE SLOT " + slot + " LEAVING " + current);
                 }
 
-                int leftover = performItemInput(source, dest, transfer, retrieve, input);
+                int leftover = performItemInput(source, dest, transfer, receive, input, liquids);
 
-                // anything over max stack size (due to leftover) will just be destroyed
-                current.setAmount(current.getAmount() - taken + leftover);
+                if (liquids.isFlowing(current) && leftover == 0) {
+                    // the contents of the bucket are transferred, but not the bucket
+                    current.setType(Material.BUCKET);
+                }
+                else {
+                    // anything over max stack size (due to leftover) will just be destroyed
+                    current.setAmount(current.getAmount() - taken + leftover);
+                }
                 source.setItem(slot, current);
 
                 if (source.getHolder() instanceof Hopper) {
-                    int cooldown = sourceInitiated
+                    int cooldown = pushed
                             ? getHopperTransferInterval(source.getHolder())
                             : getHopperCheckInterval(source.getHolder());
 
-                    setHopperCooldown((Hopper) source.getHolder(), cooldown);
+                    ReflectiveUtils.setHopperCooldown((Hopper) source.getHolder(), cooldown);
                 }
                 if (leftover == 0) {
                     break;
@@ -263,15 +205,15 @@ public class ItemFilter implements Listener {
         }
     }
 
-    public void performItemTransfer(Item item, Inventory dest, ReceivePolicy retrieve, InputPolicy input) {
+    public void performItemTransfer(Item item, Inventory dest, ReceivePolicy receive, InputPolicy input) {
 
         if (isTargeted(dest)) {
             System.out.println("++++++++++++++");
             System.out.println("SOURCE ITEM ENTITY");
-            System.out.println("DEST " + dest.getType() + " has Retrieve." + retrieve + " and Input." + input);
+            System.out.println("DEST " + dest.getType() + " has Retrieve." + receive + " and Input." + input);
         }
 
-        int leftover = performItemInput(dest, dest, item.getItemStack(), retrieve, input);
+        int leftover = performItemInput(dest, dest, item.getItemStack(), receive, input, LiquidsPolicy.NORMAL);
 
         if (isTargeted(dest)) {
             System.out.println("ITEM ENTITY HAS " + leftover + " REMAINING");
@@ -289,89 +231,79 @@ public class ItemFilter implements Listener {
         }
     }
 
-    public int performItemInput(Inventory source, Inventory dest, ItemStack transfer, ReceivePolicy retrieve, InputPolicy input) {
+    public int performItemInput(Inventory source, Inventory dest, ItemStack transfer,
+            ReceivePolicy receive, InputPolicy input, LiquidsPolicy liquids) {
 
         int leftovers = transfer.getAmount();
 
         int size = dest.getSize();
         Iterator<Integer> slots;
 
-        // try to complete existing stacks in the inventory...
-        if (leftovers > 0 && input != InputPolicy.TO_EMPTY) {
+        // try to transfer liquids if applicable...
+        if (liquids.isFlowing(transfer)) {
 
-            slots = retrieve == ReceivePolicy.RANDOM
-                    ? new RandomPermuteIterator(0, size)
-                    : IntStream.range(0, size).iterator();
-
+            slots = receive.getIterator(size);
             while (slots.hasNext() && leftovers > 0) {
-
                 int slot = slots.next();
-                if (retrieve == ReceivePolicy.REVERSED) {
-                    slot = size - 1 - slot;
-                }
+
                 ItemStack current = dest.getItem(slot);
-                if (current != null && transfer.isSimilar(current)) {
-
-                    int total = transfer.getAmount() + current.getAmount();
-                    int overflow = Math.max(0, total - transfer.getMaxStackSize());
-
-                    total -= overflow;
-                    leftovers -= (total - current.getAmount());
-
-                    if (isTargeted(source, dest)) {
-                        System.out.println("FOUND SPACE FOR " + transfer + " AT DEST SLOT " + slot + " WITH " + current);
-                    }
-
-                    current.setAmount(total);
-                    dest.setItem(slot, current);
+                if (current != null && current.getType() == Material.BUCKET && current.getAmount() == 1) {
+                    dest.setItem(slot, transfer);
+                    leftovers--;
                 }
             }
         }
-        // otherwise try to begin a new stack in the inventory...
-        if (leftovers > 0 && input != InputPolicy.TO_NONEMPTY) {
+        else {
+            // try to complete existing stacks in the inventory...
+            if (leftovers > 0 && input != InputPolicy.TO_EMPTY) {
 
-            slots = retrieve == ReceivePolicy.RANDOM
-                    ? new RandomPermuteIterator(0, size)
-                    : IntStream.range(0, size).iterator();
+                slots = receive.getIterator(size);
+                while (slots.hasNext() && leftovers > 0) {
+                    int slot = slots.next();
 
-            while (slots.hasNext() && leftovers > 0) {
+                    ItemStack current = dest.getItem(slot);
+                    if (current != null && transfer.isSimilar(current)) {
 
-                int slot = slots.next();
-                if (retrieve == ReceivePolicy.REVERSED) {
-                    slot = size - 1 - slot;
-                }
-                ItemStack current = dest.getItem(slot);
-                if (current == null) {
+                        int total = transfer.getAmount() + current.getAmount();
+                        int overflow = Math.max(0, total - transfer.getMaxStackSize());
 
-                    if (isTargeted(source, dest)) {
-                        System.out.println("FOUND SPACE FOR " + transfer + " AT DEST SLOT " + slot);
+                        total -= overflow;
+                        leftovers -= (total - current.getAmount());
+
+                        if (isTargeted(source, dest)) {
+                            System.out.println("FOUND SPACE FOR " + transfer + " AT DEST SLOT " + slot + " WITH " + current);
+                        }
+
+                        current.setAmount(total);
+                        dest.setItem(slot, current);
                     }
+                }
+            }
+            // otherwise try to begin a new stack in the inventory...
+            if (leftovers > 0 && input != InputPolicy.TO_NONEMPTY) {
 
-                    dest.setItem(slot, transfer);
-                    leftovers = 0;
+                slots = receive.getIterator(size);
+                while (slots.hasNext() && leftovers > 0) {
+                    int slot = slots.next();
+
+                    ItemStack current = dest.getItem(slot);
+                    if (current == null) {
+
+                        if (isTargeted(source, dest)) {
+                            System.out.println("FOUND SPACE FOR " + transfer + " AT DEST SLOT " + slot);
+                        }
+
+                        dest.setItem(slot, transfer);
+                        leftovers = 0;
+                    }
                 }
             }
         }
         return leftovers;
     }
 
-    private SpigotWorldConfig getWorldConfigFor(InventoryHolder holder) {
-        try {
-            if (holder instanceof BlockState) {
-                return (SpigotWorldConfig) worldSpigotConfigField.get(tileEntityWorldField.get(tileEntityField.get(holder)));
-            }
-            else if (holder instanceof Entity) {
-                return (SpigotWorldConfig) worldSpigotConfigField.get(entityWorldField.get(entityField.get(holder)));
-            }
-        }
-        catch (IllegalAccessException | NullPointerException ex) {
-            plugin.getLogger().severe("could not perform InventoryHolder reflection: " + ex.getMessage());
-        }
-        return null;
-    }
-
     private int getHopperTransferAmount(InventoryHolder holder) {
-        SpigotWorldConfig config = getWorldConfigFor(holder);
+        SpigotWorldConfig config = ReflectiveUtils.getWorldConfigFor(holder);
         if (config != null) {
             return config.hopperAmount;
         }
@@ -379,7 +311,7 @@ public class ItemFilter implements Listener {
     }
 
     private int getHopperTransferInterval(InventoryHolder holder) {
-        SpigotWorldConfig config = getWorldConfigFor(holder);
+        SpigotWorldConfig config = ReflectiveUtils.getWorldConfigFor(holder);
         if (config != null) {
             return config.hopperTransfer;
         }
@@ -387,22 +319,14 @@ public class ItemFilter implements Listener {
     }
 
     private int getHopperCheckInterval(InventoryHolder holder) {
-        SpigotWorldConfig config = getWorldConfigFor(holder);
+        SpigotWorldConfig config = ReflectiveUtils.getWorldConfigFor(holder);
         if (config != null) {
             return config.hopperCheck;
         }
         return 1;
     }
 
-    private void setHopperCooldown(Hopper hopper, int cooldown) {
-        try {
-            tileEntityHopperSetCooldownMethod.invoke(tileEntityField.get(hopper), cooldown);
-        }
-        catch (IllegalAccessException | InvocationTargetException | NullPointerException ex) {
-            plugin.getLogger().severe("could not perform Hopper reflection due to " + ex.getClass().getName() + ": " + ex.getMessage());
-        }
-    }
-
+    // debug purposes...
     private boolean isTargeted(Inventory... inventories) {
         for (Inventory inv : inventories) {
             if (inv != null && inv.getHolder() != null) {
