@@ -105,7 +105,7 @@ public class BlockPlacer implements Listener {
 
                     if (item.getItemMeta() instanceof BlockStateMeta) {
                         BlockStateMeta itemMeta = (BlockStateMeta) item.getItemMeta();
-                        ReflectiveUtils.copyBlockState(dest.getState(), itemMeta.getBlockState());
+                        ReflectiveUtils.copyBlockState(itemMeta.getBlockState(), dest.getState());
                     }
                     dest.getWorld().playEffect(dest.getLocation().add(0.5, 0.5, 0.5), Effect.STEP_SOUND, dest.getType());
 

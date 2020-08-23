@@ -3,6 +3,7 @@ package me.cynadyde.simplemachines;
 import me.cynadyde.simplemachines.gui.ItemTransfererGui;
 import me.cynadyde.simplemachines.machine.*;
 import me.cynadyde.simplemachines.util.PluginKey;
+import me.cynadyde.simplemachines.util.ReflectiveUtils;
 import org.bukkit.block.Block;
 import org.bukkit.block.Container;
 import org.bukkit.command.Command;
@@ -25,6 +26,7 @@ public class SimpleMachinesPlugin extends JavaPlugin implements Listener {
     @Override
     public void onEnable() {
         PluginKey.refresh(this);
+        ReflectiveUtils.setLogger(getLogger());
 
         getServer().getPluginManager().registerEvents(autoCrafterModule = new AutoCrafter(this), this);
         getServer().getPluginManager().registerEvents(itemTransfererModule = new ItemTransferer(this), this);

@@ -35,6 +35,7 @@ public class ItemTransfererGui implements Listener {
     private final int slotO = 14;
     private final int slotL = 15;
 
+    private final ItemStack gui0 = new ItemStack(Material.AIR, 0);
     private final ItemStack gui1 = Utils.createGuiItem(Material.BLACK_STAINED_GLASS_PANE, " ", "");
     private final ItemStack gui2 = Utils.createGuiItem(Material.WHITE_STAINED_GLASS_PANE, " ", "");
 
@@ -128,7 +129,14 @@ public class ItemTransfererGui implements Listener {
     @EventHandler(ignoreCancelled = true)
     public void onInventoryDrag(InventoryDragEvent event) {
         if (event.getView() instanceof Window) {
-            event.setCancelled(true);
+            Window gui = (Window) event.getView();
+
+            for (Integer slot : event.getRawSlots()) {
+                Inventory clickedInv = gui.getInventory(slot);
+                if (gui.getTopInventory().equals(clickedInv)) {
+                    event.setCancelled(true);
+                }
+            }
         }
     }
 
@@ -150,6 +158,8 @@ public class ItemTransfererGui implements Listener {
     }
 
     public void closeAllGuis() {
+        // FIXME onInventoryClose is not called when plugin is being disabled!
+
         for (Window gui : guis.values()) {
             gui.getPlayer().closeInventory();
         }
@@ -183,7 +193,7 @@ public class ItemTransfererGui implements Listener {
 
             view.setContents(new ItemStack[] {
                     gui1, gui1, guiR, guiI, guiS, guiO, guiL, gui1, gui1,
-                    gui2, gui2, null, null, null, null, null, gui2, gui2
+                    gui2, gui2, gui0, gui0, gui0, gui0, gui0, gui2, gui2
             });
 
             TransferScheme scheme = TransferScheme.ofContainer(container);
