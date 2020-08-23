@@ -3,6 +3,7 @@ package me.cynadyde.simplemachines.machine;
 import me.cynadyde.simplemachines.SimpleMachinesPlugin;
 import me.cynadyde.simplemachines.util.RandomPermuteIterator;
 import me.cynadyde.simplemachines.util.ReflectiveUtils;
+import org.bukkit.Bukkit;
 import org.bukkit.Effect;
 import org.bukkit.Material;
 import org.bukkit.block.*;
@@ -10,13 +11,21 @@ import org.bukkit.block.data.BlockData;
 import org.bukkit.block.data.Directional;
 import org.bukkit.block.data.Rotatable;
 import org.bukkit.block.data.Waterlogged;
+import org.bukkit.craftbukkit.v1_16_R2.block.CraftSkull;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockDispenseEvent;
+import org.bukkit.event.block.BlockFormEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.block.BlockSpreadEvent;
+import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.inventory.InventoryMoveItemEvent;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.BannerMeta;
 import org.bukkit.inventory.meta.BlockStateMeta;
+import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.SkullMeta;
 
 import java.util.Iterator;
 
@@ -85,37 +94,57 @@ public class BlockPlacer implements Listener {
                 }
                 if (slot != -1) {
                     ItemStack item = contents[slot];
+                    BlockState oldState = dest.getState();
 
                     dest.setType(item.getType());
-                    BlockData destData = dest.getBlockData();
+                    BlockData data = dest.getBlockData();
 
-                    if (destData instanceof Directional) {
-                        ((Directional) destData).setFacing(facing);
+                    if (data instanceof Directional) {
+                        ((Directional) data).setFacing(facing);
                     }
-                    if (destData instanceof Rotatable) {
-                        ((Rotatable) destData).setRotation(facing);
+                    if (data instanceof Rotatable) {
+                        ((Rotatable) data).setRotation(facing);
                     }
-                    if (destData instanceof Waterlogged) {
-                        ((Waterlogged) destData).setWaterlogged(waterlogged);
+                    if (data instanceof Waterlogged) {
+                        ((Waterlogged) data).setWaterlogged(waterlogged);
                     }
-                    dest.setBlockData(destData);
+                    dest.setBlockData(data);
+                    BlockState state = dest.getState();
 
-                    BlockState destState = dest.getState();
-                    if (item.getItemMeta() instanceof BlockStateMeta) {
-                        BlockStateMeta itemMeta = (BlockStateMeta) item.getItemMeta();
-                        ReflectiveUtils.copyBlockState(itemMeta.getBlockState(), destState);
-                        if (destState instanceof Container && itemMeta.hasDisplayName()) {
-                            String name = itemMeta.getDisplayName();
-                            ReflectiveUtils.setCustomContainerName((Container) destState, name);
+                    oldState.update(true, true);
+
+                    ItemMeta itemMeta = item.getItemMeta();
+                    if (itemMeta instanceof BlockStateMeta) {
+                        BlockStateMeta meta = (BlockStateMeta) itemMeta;
+                        ReflectiveUtils.copyBlockState(meta.getBlockState(), state);
+                        if (state instanceof Container && meta.hasDisplayName()) {
+                            String name = meta.getDisplayName();
+                            ReflectiveUtils.setCustomContainerName((Container) state, name);
                         }
                     }
-                    destState.update(true, true);
+                    else if ((itemMeta instanceof BannerMeta) && (state instanceof Banner)) {
+                        BannerMeta meta = (BannerMeta) itemMeta;
+                        Banner banner = (Banner) state;
+                        banner.setPatterns(meta.getPatterns());
+                    }
+                    else if ((itemMeta instanceof SkullMeta) && (state instanceof Skull)) {
+                        SkullMeta meta = (SkullMeta) itemMeta;
+                        Skull skull = (Skull) state;
+                        ReflectiveUtils.copySkullProfile(meta, skull);
+                    }
 
-                    dest.getWorld().playEffect(dest.getLocation().add(0.5, 0.5, 0.5), Effect.STEP_SOUND, dest.getType());
+                    BlockFormEvent event = new BlockFormEvent(dest, state);
+                    plugin.getServer().getPluginManager().callEvent(event);
+                    if (!event.isCancelled()) {
 
-                    ItemStack altered = item.clone();
-                    altered.setAmount(item.getAmount() - 1);
-                    dropper.getInventory().setItem(slot, altered);
+                        event.getNewState().update(true, true);
+
+                        dest.getWorld().playEffect(dest.getLocation().add(0.5, 0.5, 0.5), Effect.STEP_SOUND, dest.getType());
+
+                        ItemStack altered = item.clone();
+                        altered.setAmount(item.getAmount() - 1);
+                        dropper.getInventory().setItem(slot, altered);
+                    }
                 }
             }
         }

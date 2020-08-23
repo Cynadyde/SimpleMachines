@@ -1,13 +1,11 @@
 package me.cynadyde.simplemachines.util;
 
 import org.bukkit.Bukkit;
-import org.bukkit.block.Block;
-import org.bukkit.block.BlockState;
-import org.bukkit.block.Container;
-import org.bukkit.block.Hopper;
+import org.bukkit.block.*;
 import org.bukkit.entity.Entity;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.SkullMeta;
 import org.spigotmc.SpigotWorldConfig;
 
 import java.lang.reflect.Constructor;
@@ -25,6 +23,8 @@ public class ReflectiveUtils {
     private static Class<?> obcCraftContainer;
     private static Class<?> obcCraftEntity;
     private static Class<?> obcCraftItemStack;
+    private static Class<?> obcCraftMetaSkull;
+    private static Class<?> obcCraftSkull;
     private static Class<?> obcCraftWorld;
     private static Class<?> nmsBlock;
     private static Class<?> nmsEntity;
@@ -66,6 +66,8 @@ public class ReflectiveUtils {
 
     private static Field obcCraftEntityEntity;
     private static Field obcCraftItemStackHandle;
+    private static Field obcCraftMetaSkullProfile;
+    private static Field obcCraftSkullProfile;
     private static Field nmsEntityWorld;
     private static Field nmsWorldSpigotConfig;
 
@@ -93,6 +95,8 @@ public class ReflectiveUtils {
             obcCraftContainer = Class.forName("org.bukkit.craftbukkit.v1_16_R2.block.CraftContainer");
             obcCraftEntity = Class.forName("org.bukkit.craftbukkit." + version + ".entity.CraftEntity");
             obcCraftItemStack = Class.forName("org.bukkit.craftbukkit." + version + ".inventory.CraftItemStack");
+            obcCraftMetaSkull = Class.forName("org.bukkit.craftbukkit.v1_16_R2.inventory.CraftMetaSkull");
+            obcCraftSkull = Class.forName("org.bukkit.craftbukkit.v1_16_R2.block.CraftSkull");
             obcCraftWorld = Class.forName("org.bukkit.craftbukkit." + version + ".CraftWorld");
             nmsBlock = Class.forName("net.minecraft.server." + version + ".Block");
             nmsEntity = Class.forName("net.minecraft.server." + version + ".Entity");
@@ -137,6 +141,8 @@ public class ReflectiveUtils {
             // get the needed fields
             obcCraftEntityEntity = obcCraftEntity.getDeclaredField("entity");
             obcCraftItemStackHandle = obcCraftItemStack.getDeclaredField("handle");
+            obcCraftMetaSkullProfile = obcCraftMetaSkull.getDeclaredField("profile");
+            obcCraftSkullProfile = obcCraftSkull.getDeclaredField("profile");
             nmsEntityWorld = nmsEntity.getDeclaredField("world");
             nmsWorldSpigotConfig = nmsWorld.getField("spigotConfig");
 
@@ -150,6 +156,8 @@ public class ReflectiveUtils {
             obcCraftEntityEntity.setAccessible(true);
             obcCraftItemStackAsNewCraftStack.setAccessible(true);
             obcCraftItemStackHandle.setAccessible(true);
+            obcCraftMetaSkullProfile.setAccessible(true);
+            obcCraftSkullProfile.setAccessible(true);
             obcCraftWorldGetHandle.setAccessible(true);
             nmsBlockGetBlockData.setAccessible(true);
             nmsBlockDataCanPlace.setAccessible(true);
@@ -228,12 +236,21 @@ public class ReflectiveUtils {
             throw new IllegalArgumentException("source and dest must be non-null and have the same class.");
         }
         try {
+            System.out.println("dest: " + dest);
+            System.out.println("source: " + source);
+
             // modifies dest's tile entity snapshot so that its next update applies changes to the world
             if (obcCraftBlockEntityState.isInstance(dest) && obcCraftBlockEntityState.isInstance(source)) {
+
+                System.out.println("old dest nbt: " + nmsTileEntitySave.invoke(obcCraftBlockEntityStateGetSnapshot.invoke(dest), nmsNbtCompoundConstructor.newInstance()));
+                System.out.println("source nbt: " + nmsTileEntitySave.invoke(obcCraftBlockEntityStateGetSnapshot.invoke(source), nmsNbtCompoundConstructor.newInstance()));
+
                 obcCraftBlockEntityStateLoad.invoke(dest, obcCraftBlockEntityStateGetSnapshot.invoke(source));
+
+                System.out.println("new dest nbt: " + nmsTileEntitySave.invoke(obcCraftBlockEntityStateGetSnapshot.invoke(dest), nmsNbtCompoundConstructor.newInstance()));
             }
         }
-        catch (IllegalAccessException | InvocationTargetException | ClassCastException | NullPointerException ex) {
+        catch (IllegalAccessException | InvocationTargetException | ClassCastException | NullPointerException | InstantiationException ex) {
             logReflectionError("CraftBlockEntityState#load()", ex);
         }
     }
@@ -243,7 +260,16 @@ public class ReflectiveUtils {
             obcCraftContainerSetCustomName.invoke(container, name);
         }
         catch (IllegalAccessException | InvocationTargetException | ClassCastException | NullPointerException ex) {
-            logReflectionError("CraftContainer#setCustomName", ex);
+            logReflectionError("CraftContainer#setCustomName()", ex);
+        }
+    }
+
+    public static void copySkullProfile(SkullMeta from, Skull to) {
+        try {
+            obcCraftSkullProfile.set(to, obcCraftMetaSkullProfile.get(from));
+        }
+        catch (IllegalAccessException ex) {
+            logReflectionError("CraftSkull#profile", ex);
         }
     }
 
