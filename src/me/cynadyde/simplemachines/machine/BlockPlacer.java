@@ -5,10 +5,7 @@ import me.cynadyde.simplemachines.util.RandomPermuteIterator;
 import me.cynadyde.simplemachines.util.ReflectiveUtils;
 import org.bukkit.Effect;
 import org.bukkit.Material;
-import org.bukkit.block.Block;
-import org.bukkit.block.BlockFace;
-import org.bukkit.block.BlockState;
-import org.bukkit.block.Dropper;
+import org.bukkit.block.*;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.block.data.Directional;
 import org.bukkit.block.data.Rotatable;
@@ -107,6 +104,10 @@ public class BlockPlacer implements Listener {
                     if (item.getItemMeta() instanceof BlockStateMeta) {
                         BlockStateMeta itemMeta = (BlockStateMeta) item.getItemMeta();
                         ReflectiveUtils.copyBlockState(itemMeta.getBlockState(), destState);
+                        if (destState instanceof Container && itemMeta.hasDisplayName()) {
+                            String name = itemMeta.getDisplayName();
+                            ReflectiveUtils.setCustomContainerName((Container) destState, name);
+                        }
                     }
                     destState.update(true, true);
 

@@ -3,6 +3,7 @@ package me.cynadyde.simplemachines.util;
 import org.bukkit.Bukkit;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
+import org.bukkit.block.Container;
 import org.bukkit.block.Hopper;
 import org.bukkit.entity.Entity;
 import org.bukkit.inventory.InventoryHolder;
@@ -21,6 +22,7 @@ public class ReflectiveUtils {
 
     private static Class<?> obcCraftBlock;
     private static Class<?> obcCraftBlockEntityState;
+    private static Class<?> obcCraftContainer;
     private static Class<?> obcCraftEntity;
     private static Class<?> obcCraftItemStack;
     private static Class<?> obcCraftWorld;
@@ -45,6 +47,7 @@ public class ReflectiveUtils {
     private static Method obcCraftBlockEntityStateGetTileEntity;
     private static Method obcCraftBlockEntityStateGetSnapshot;
     private static Method obcCraftBlockEntityStateLoad;
+    private static Method obcCraftContainerSetCustomName;
     private static Method obcCraftItemStackAsNewCraftStack;
     private static Method obcCraftWorldGetHandle;
     private static Method nmsBlockGetBlockData;
@@ -87,6 +90,7 @@ public class ReflectiveUtils {
             // get the needed obc/nms classes
             obcCraftBlock = Class.forName("org.bukkit.craftbukkit." + version + ".block.CraftBlock");
             obcCraftBlockEntityState = Class.forName("org.bukkit.craftbukkit." + version + ".block.CraftBlockEntityState");
+            obcCraftContainer = Class.forName("org.bukkit.craftbukkit.v1_16_R2.block.CraftContainer");
             obcCraftEntity = Class.forName("org.bukkit.craftbukkit." + version + ".entity.CraftEntity");
             obcCraftItemStack = Class.forName("org.bukkit.craftbukkit." + version + ".inventory.CraftItemStack");
             obcCraftWorld = Class.forName("org.bukkit.craftbukkit." + version + ".CraftWorld");
@@ -113,6 +117,7 @@ public class ReflectiveUtils {
             obcCraftBlockEntityStateGetTileEntity = obcCraftBlockEntityState.getDeclaredMethod("getTileEntity");
             obcCraftBlockEntityStateGetSnapshot = obcCraftBlockEntityState.getDeclaredMethod("getSnapshot");
             obcCraftBlockEntityStateLoad = obcCraftBlockEntityState.getDeclaredMethod("load", nmsTileEntity);
+            obcCraftContainerSetCustomName = obcCraftContainer.getDeclaredMethod("setCustomName", String.class);
             obcCraftItemStackAsNewCraftStack = obcCraftItemStack.getDeclaredMethod("asNewCraftStack", nmsItem);
             obcCraftWorldGetHandle = obcCraftWorld.getDeclaredMethod("getHandle");
             nmsBlockGetBlockData = nmsBlock.getDeclaredMethod("getBlockData");
@@ -141,6 +146,7 @@ public class ReflectiveUtils {
             obcCraftBlockEntityStateGetTileEntity.setAccessible(true);
             obcCraftBlockEntityStateGetSnapshot.setAccessible(true);
             obcCraftBlockEntityStateLoad.setAccessible(true);
+            obcCraftContainerSetCustomName.setAccessible(true);
             obcCraftEntityEntity.setAccessible(true);
             obcCraftItemStackAsNewCraftStack.setAccessible(true);
             obcCraftItemStackHandle.setAccessible(true);
@@ -218,45 +224,26 @@ public class ReflectiveUtils {
     }
 
     public static void copyBlockState(BlockState source, BlockState dest) {
-
         if (source == null || dest == null || !source.getClass().equals(dest.getClass())) {
             throw new IllegalArgumentException("source and dest must be non-null and have the same class.");
         }
         try {
+            // modifies dest's tile entity snapshot so that its next update applies changes to the world
             if (obcCraftBlockEntityState.isInstance(dest) && obcCraftBlockEntityState.isInstance(source)) {
-                // modifies dest's tile entity snapshot so that its next update applies changes to the world
-
-                Object sourceTileEnt = obcCraftBlockEntityStateGetSnapshot.invoke(source);
-                Object destTileEnt = obcCraftBlockEntityStateGetSnapshot.invoke(dest);
-                System.out.println("sourceTileEnt: " + sourceTileEnt);
-                System.out.println("destTileEnt: " + destTileEnt);
-
-                Object destNbt = nmsTileEntitySave.invoke(destTileEnt, nmsNbtCompoundConstructor.newInstance());
-                Object sourceNbt = nmsTileEntitySave.invoke(sourceTileEnt, nmsNbtCompoundConstructor.newInstance());
-                System.out.println("destNbt: " + destNbt);
-                System.out.println("sourceNbt: " + sourceNbt);
-
                 obcCraftBlockEntityStateLoad.invoke(dest, obcCraftBlockEntityStateGetSnapshot.invoke(source));
-
-//                ((CraftBlockEntityState<?>) dest).load(((CraftBlockEntityState<?>) source).getSnapshot());
-
-//                Object destPos = nmsTileEntityGetPosition.invoke(destTileEnt);
-//                Object destBlockData = obcCraftBlockGetNMS.invoke(dest.getBlock());
-//                System.out.println("destPos: " + destPos);
-//                System.out.println("destBlockData: " + destBlockData);
-//
-//                nmsTileEntitySetPosition.invoke(sourceTileEnt, destPos);
-//                nmsTileEntityLoad.invoke(destTileEnt, destBlockData, sourceNbt);
-
-                destNbt = nmsTileEntitySave.invoke(destTileEnt, nmsNbtCompoundConstructor.newInstance());
-                sourceNbt = nmsTileEntitySave.invoke(sourceTileEnt, nmsNbtCompoundConstructor.newInstance());
-
-                System.out.println("destNbt: " + destNbt);
-                System.out.println("sourceNbt: " + sourceNbt);
             }
         }
-        catch (IllegalAccessException | InvocationTargetException | InstantiationException | ClassCastException | NullPointerException ex) {
-            logReflectionError("TileEntity#applyTo()", ex);
+        catch (IllegalAccessException | InvocationTargetException | ClassCastException | NullPointerException ex) {
+            logReflectionError("CraftBlockEntityState#load()", ex);
+        }
+    }
+
+    public static void setCustomContainerName(Container container, String name) {
+        try {
+            obcCraftContainerSetCustomName.invoke(container, name);
+        }
+        catch (IllegalAccessException | InvocationTargetException | ClassCastException | NullPointerException ex) {
+            logReflectionError("CraftContainer#setCustomName", ex);
         }
     }
 
