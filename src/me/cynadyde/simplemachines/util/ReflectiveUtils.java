@@ -21,7 +21,22 @@ public class ReflectiveUtils {
 
     private static Class<?> obcCraftBlock;
     private static Class<?> obcCraftBlockEntityState;
+    private static Class<?> obcCraftEntity;
     private static Class<?> obcCraftItemStack;
+    private static Class<?> obcCraftWorld;
+    private static Class<?> nmsBlock;
+    private static Class<?> nmsEntity;
+    private static Class<?> nmsIBlockData;
+    private static Class<?> nmsIWorldReader;
+    private static Class<?> nmsBlockData;
+    private static Class<?> nmsItem;
+    private static Class<?> nmsItemBlock;
+    private static Class<?> nmsItemStack;
+    private static Class<?> nmsNbtCompound;
+    private static Class<?> nmsTileEntity;
+    private static Class<?> nmsTileEntityHopper;
+    private static Class<?> nmsWorld;
+    private static Class<?> nmsBlockPosition;
 
     private static Constructor<?> nmsNbtCompoundConstructor;
 
@@ -31,9 +46,11 @@ public class ReflectiveUtils {
     private static Method obcCraftBlockEntityStateGetSnapshot;
     private static Method obcCraftItemStackAsNewCraftStack;
     private static Method obcCraftWorldGetHandle;
-    private static Method nmsBlockDataGetBlock;
+    private static Method nmsBlockGetBlockData;
+    private static Method nmsBlockDataCanPlace;
     private static Method nmsItemGetDestroySpeed;
     private static Method nmsItemGetCraftingRemainingItem;
+    private static Method nmsItemBlockGetBlock;
     private static Method nmsItemStackGetItem;
     private static Method nmsTileEntityGetWorld;
     private static Method nmsTileEntityGetPosition;
@@ -41,7 +58,6 @@ public class ReflectiveUtils {
     private static Method nmsTileEntityLoad;
     private static Method nmsTileEntitySetLocation;
     private static Method nmsTileEntitySave;
-    private static Method nmsWorldApplyPhysics;
 
     private static Field obcCraftEntityEntity;
     private static Field obcCraftItemStackHandle;
@@ -57,7 +73,7 @@ public class ReflectiveUtils {
                 + ex.getClass().getName() + ": " + ex.getMessage());
     }
 
-    public static void refresh() {
+    public static void reflect() {
         try {
             // get necessary classes depending on current MC version in use
             String version = Bukkit.getServer().getClass().getPackage().getName().split("\\.")[3];
@@ -65,20 +81,22 @@ public class ReflectiveUtils {
             // get the needed obc/nms classes
             obcCraftBlock = Class.forName("org.bukkit.craftbukkit." + version + ".block.CraftBlock");
             obcCraftBlockEntityState = Class.forName("org.bukkit.craftbukkit." + version + ".block.CraftBlockEntityState");
-            Class<?> obcCraftEntity = Class.forName("org.bukkit.craftbukkit." + version + ".entity.CraftEntity");
+            obcCraftEntity = Class.forName("org.bukkit.craftbukkit." + version + ".entity.CraftEntity");
             obcCraftItemStack = Class.forName("org.bukkit.craftbukkit." + version + ".inventory.CraftItemStack");
-            Class<?> obcCraftWorld = Class.forName("org.bukkit.craftbukkit." + version + ".CraftWorld");
-            Class<?> nmsBlock = Class.forName("net.minecraft.server." + version + ".Block");
-            Class<?> nmsEntity = Class.forName("net.minecraft.server." + version + ".Entity");
-            Class<?> nmsIBlockData = Class.forName("net.minecraft.server." + version + ".IBlockData");
-            Class<?> nmsBlockData = Class.forName("net.minecraft.server.v1_16_R2.BlockBase$BlockData");
-            Class<?> nmsItem = Class.forName("net.minecraft.server." + version + ".Item");
-            Class<?> nmsItemStack = Class.forName("net.minecraft.server." + version + ".ItemStack");
-            Class<?> nmsNbtCompound = Class.forName("net.minecraft.server." + version + ".NBTTagCompound");
-            Class<?> nmsTileEntity = Class.forName("net.minecraft.server." + version + ".TileEntity");
-            Class<?> nmsTileEntityHopper = Class.forName("net.minecraft.server." + version + ".TileEntityHopper");
-            Class<?> nmsWorld = Class.forName("net.minecraft.server." + version + ".World");
-            Class<?> nmsBlockPosition = Class.forName("net.minecraft.server." + version + ".BlockPosition");
+            obcCraftWorld = Class.forName("org.bukkit.craftbukkit." + version + ".CraftWorld");
+            nmsBlock = Class.forName("net.minecraft.server." + version + ".Block");
+            nmsEntity = Class.forName("net.minecraft.server." + version + ".Entity");
+            nmsIBlockData = Class.forName("net.minecraft.server." + version + ".IBlockData");
+            nmsIWorldReader = Class.forName("net.minecraft.server.v1_16_R2.IWorldReader");
+            nmsBlockData = Class.forName("net.minecraft.server." + version + ".BlockBase$BlockData");
+            nmsItem = Class.forName("net.minecraft.server." + version + ".Item");
+            nmsItemBlock = Class.forName("net.minecraft.server.v1_16_R2.ItemBlock");
+            nmsItemStack = Class.forName("net.minecraft.server." + version + ".ItemStack");
+            nmsNbtCompound = Class.forName("net.minecraft.server." + version + ".NBTTagCompound");
+            nmsTileEntity = Class.forName("net.minecraft.server." + version + ".TileEntity");
+            nmsTileEntityHopper = Class.forName("net.minecraft.server." + version + ".TileEntityHopper");
+            nmsWorld = Class.forName("net.minecraft.server." + version + ".World");
+            nmsBlockPosition = Class.forName("net.minecraft.server." + version + ".BlockPosition");
 
             // get the needed constructors
             nmsNbtCompoundConstructor = nmsNbtCompound.getConstructor();
@@ -90,9 +108,11 @@ public class ReflectiveUtils {
             obcCraftBlockEntityStateGetSnapshot = obcCraftBlockEntityState.getDeclaredMethod("getSnapshot");
             obcCraftItemStackAsNewCraftStack = obcCraftItemStack.getDeclaredMethod("asNewCraftStack", nmsItem);
             obcCraftWorldGetHandle = obcCraftWorld.getDeclaredMethod("getHandle");
-            nmsBlockDataGetBlock = nmsBlockData.getDeclaredMethod("getBlock");
+            nmsBlockGetBlockData = nmsBlock.getDeclaredMethod("getBlockData");
+            nmsBlockDataCanPlace = nmsBlockData.getDeclaredMethod("canPlace", nmsIWorldReader, nmsBlockPosition);
             nmsItemGetDestroySpeed = nmsItem.getDeclaredMethod("getDestroySpeed", nmsItemStack, nmsIBlockData);
             nmsItemGetCraftingRemainingItem = nmsItem.getDeclaredMethod("getCraftingRemainingItem");
+            nmsItemBlockGetBlock = nmsItemBlock.getDeclaredMethod("getBlock");
             nmsItemStackGetItem = nmsItemStack.getDeclaredMethod("getItem");
             nmsTileEntityGetWorld = nmsTileEntity.getDeclaredMethod("getWorld");
             nmsTileEntityGetPosition = nmsTileEntity.getDeclaredMethod("getPosition");
@@ -100,7 +120,7 @@ public class ReflectiveUtils {
             nmsTileEntityLoad = nmsTileEntity.getDeclaredMethod("load", nmsIBlockData, nmsNbtCompound);
             nmsTileEntitySetLocation = nmsTileEntity.getDeclaredMethod("setLocation", nmsWorld, nmsBlockPosition);
             nmsTileEntitySave = nmsTileEntity.getDeclaredMethod("save", nmsNbtCompound);
-            nmsWorldApplyPhysics = nmsWorld.getDeclaredMethod("applyPhysics", nmsBlockPosition, nmsBlock);
+//            nmsWorldApplyPhysics = nmsWorld.getDeclaredMethod("applyPhysics", nmsBlockPosition, nmsBlock);
 
             // get the needed fields
             obcCraftEntityEntity = obcCraftEntity.getDeclaredField("entity");
@@ -117,9 +137,11 @@ public class ReflectiveUtils {
             obcCraftItemStackAsNewCraftStack.setAccessible(true);
             obcCraftItemStackHandle.setAccessible(true);
             obcCraftWorldGetHandle.setAccessible(true);
-            nmsBlockDataGetBlock.setAccessible(true);
+            nmsBlockGetBlockData.setAccessible(true);
+            nmsBlockDataCanPlace.setAccessible(true);
             nmsItemGetDestroySpeed.setAccessible(true);
             nmsItemGetCraftingRemainingItem.setAccessible(true);
+            nmsItemBlockGetBlock.setAccessible(true);
             nmsItemStackGetItem.setAccessible(true);
             nmsEntityWorld.setAccessible(true);
             nmsTileEntityGetWorld.setAccessible(true);
@@ -129,7 +151,7 @@ public class ReflectiveUtils {
             nmsTileEntitySave.setAccessible(true);
             nmsTileEntityHopperSetCooldown.setAccessible(true);
             nmsWorldSpigotConfig.setAccessible(true);
-            nmsWorldApplyPhysics.setAccessible(true);
+//            nmsWorldApplyPhysics.setAccessible(true);
         }
         catch (ClassNotFoundException | NoSuchMethodException | NoSuchFieldException ex) {
             logReflectionError("initial", ex);
@@ -169,6 +191,8 @@ public class ReflectiveUtils {
     }
 
     public static void copyBlockState(BlockState source, BlockState dest) {
+        // FIXME lines on sign didn't seem to be retained
+
         if (source == null || dest == null || !source.getClass().equals(dest.getClass())) {
             throw new IllegalArgumentException("source and dest must be non-null and have the same class.");
         }
@@ -194,27 +218,44 @@ public class ReflectiveUtils {
         }
     }
 
-    public static void forcePhysicsUpdate(Block block) {
+    public static boolean canPlaceOn(ItemStack item, Block block) {
+
+//        net.minecraft.server.v1_16_R2.World nmsWorldObj = ((CraftWorld) block.getWorld()).getHandle();
+//        net.minecraft.server.v1_16_R2.BlockPosition nmsBlockPositionObj = ((CraftBlock) block).getPosition();
+//        net.minecraft.server.v1_16_R2.IBlockData nmsBlockDataObj = ((CraftBlock) block).getNMS();
+//        return nmsBlockDataObj.canPlace(nmsWorldObj, nmsBlockPositionObj);
+
         try {
-            System.out.println("Attempting to force physics on: " + block);
-
-            Object nmsBlockPositionObj = obcCraftBlockGetPosition.invoke(block);
-            System.out.println("pos: " + nmsBlockPositionObj);
-
             Object nmsWorldObj = obcCraftWorldGetHandle.invoke(block.getWorld());
-            System.out.println("world: " + nmsWorldObj);
+            Object nmsBlockPositionObj = obcCraftBlockGetPosition.invoke(block);
+            Object nmsItemStackObj = obcCraftItemStackHandle.get(item);
+            Object nmsItemObj = nmsItemStackGetItem.invoke(nmsItemStackObj);
 
-            Object nmsBlockDataObj = obcCraftBlockGetNMS.invoke(block);
-            System.out.println("data: " + nmsBlockDataObj);
+            if (nmsItemBlock.isInstance(nmsItemObj)) {
 
-            Object nmsBlockObj = nmsBlockDataGetBlock.invoke(nmsBlockDataObj);
-            System.out.println("block: " + nmsBlockObj);
+                Object nmsBlockObj = nmsItemBlockGetBlock.invoke(nmsItemObj);
+                Object nmsBlockDataObj = nmsBlockGetBlockData.invoke(nmsBlockObj);
 
-            nmsWorldApplyPhysics.invoke(nmsWorldObj, nmsBlockPositionObj, nmsBlockObj);
+                boolean canPlace = (boolean) nmsBlockDataCanPlace.invoke(nmsBlockDataObj, nmsWorldObj, nmsBlockPositionObj);
+
+                System.out.println("nmsWorldObj: " + nmsWorldObj);
+                System.out.println("nmsBlockPositionObj: " + nmsBlockPositionObj);
+                System.out.println("nmsItemStackObj: " + nmsItemStackObj);
+                System.out.println("nmsItemObj: " + nmsItemObj);
+                System.out.println("nmsBlockObj: " + nmsBlockObj);
+                System.out.println("nmsBlockDataObj: " + nmsBlockDataObj);
+                System.out.println("canPlace: " + canPlace);
+
+                return canPlace;
+            }
+            else {
+                System.out.println("Item was not an item block!");
+            }
         }
-        catch (ClassCastException | IllegalAccessException | InvocationTargetException ex) {
-            logReflectionError("World#applyPhysics", ex);
+        catch (ClassCastException | IllegalAccessException | InvocationTargetException | NullPointerException ex) {
+            logReflectionError("IBlockData#canPlace()", ex);
         }
+        return false;
     }
 
     public static SpigotWorldConfig getWorldConfigFor(InventoryHolder holder) {

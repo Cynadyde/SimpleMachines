@@ -81,16 +81,13 @@ public class BlockPlacer implements Listener {
                 while (iterator.hasNext()) {
                     int i = iterator.next();
                     ItemStack item = contents[i];
-                    if (item != null && item.getType().isBlock()) {
+                    if (item != null && canPlaceItemAt(item, dest)) {
                         slot = i;
                         break;
                     }
                 }
                 if (slot != -1) {
                     ItemStack item = contents[slot];
-//                    if (isItemPlaceableAt(item, dest)) {
-//
-//                    }
 
                     dest.setType(item.getType());
                     BlockData destData = dest.getBlockData();
@@ -112,13 +109,6 @@ public class BlockPlacer implements Listener {
                         ReflectiveUtils.copyBlockState(itemMeta.getBlockState(), destState);
                     }
                     destState.update(true, true);
-                    // FIXME do physics update to prevent floating torches, etc.
-
-                    Runnable task = () -> {
-                        ReflectiveUtils.forcePhysicsUpdate(dest.getRelative(BlockFace.DOWN));
-                        ReflectiveUtils.forcePhysicsUpdate(dest.getRelative(facing));
-                    };
-                    plugin.getServer().getScheduler().runTaskLater(plugin, task, 1L);
 
                     dest.getWorld().playEffect(dest.getLocation().add(0.5, 0.5, 0.5), Effect.STEP_SOUND, dest.getType());
 
@@ -128,5 +118,9 @@ public class BlockPlacer implements Listener {
                 }
             }
         }
+    }
+
+    public boolean canPlaceItemAt(ItemStack item, Block block) {
+        return item.getType().isBlock() && ReflectiveUtils.canPlaceOn(item, block);
     }
 }

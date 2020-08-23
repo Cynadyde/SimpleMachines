@@ -27,7 +27,7 @@ public class SimpleMachinesPlugin extends JavaPlugin implements Listener {
     public void onEnable() {
         PluginKey.refresh(this);
         ReflectiveUtils.setLogger(getLogger());
-        ReflectiveUtils.refresh();
+        ReflectiveUtils.reflect();
 
         getServer().getPluginManager().registerEvents(autoCrafterModule = new AutoCrafter(this), this);
         getServer().getPluginManager().registerEvents(itemTransfererModule = new ItemTransferer(this), this);
