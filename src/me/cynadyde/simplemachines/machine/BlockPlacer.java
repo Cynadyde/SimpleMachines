@@ -88,25 +88,38 @@ public class BlockPlacer implements Listener {
                 }
                 if (slot != -1) {
                     ItemStack item = contents[slot];
+//                    if (isItemPlaceableAt(item, dest)) {
+//
+//                    }
 
                     dest.setType(item.getType());
                     BlockData destData = dest.getBlockData();
 
                     if (destData instanceof Directional) {
-                        ((Directional) destData).setFacing(facing.getOppositeFace());
+                        ((Directional) destData).setFacing(facing);
                     }
                     if (destData instanceof Rotatable) {
-                        ((Rotatable) destData).setRotation(facing.getOppositeFace());
+                        ((Rotatable) destData).setRotation(facing);
                     }
                     if (destData instanceof Waterlogged) {
                         ((Waterlogged) destData).setWaterlogged(waterlogged);
                     }
                     dest.setBlockData(destData);
 
+                    BlockState destState = dest.getState();
                     if (item.getItemMeta() instanceof BlockStateMeta) {
                         BlockStateMeta itemMeta = (BlockStateMeta) item.getItemMeta();
-                        ReflectiveUtils.copyBlockState(itemMeta.getBlockState(), dest.getState());
+                        ReflectiveUtils.copyBlockState(itemMeta.getBlockState(), destState);
                     }
+                    destState.update(true, true);
+                    // FIXME do physics update to prevent floating torches, etc.
+
+                    Runnable task = () -> {
+                        ReflectiveUtils.forcePhysicsUpdate(dest.getRelative(BlockFace.DOWN));
+                        ReflectiveUtils.forcePhysicsUpdate(dest.getRelative(facing));
+                    };
+                    plugin.getServer().getScheduler().runTaskLater(plugin, task, 1L);
+
                     dest.getWorld().playEffect(dest.getLocation().add(0.5, 0.5, 0.5), Effect.STEP_SOUND, dest.getType());
 
                     ItemStack altered = item.clone();
