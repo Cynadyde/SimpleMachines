@@ -20,9 +20,7 @@ import org.bukkit.inventory.InventoryView;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 
 public class ItemTransfererGui implements Listener {
 
@@ -34,6 +32,8 @@ public class ItemTransfererGui implements Listener {
     private final int slotS = 13;
     private final int slotO = 14;
     private final int slotL = 15;
+
+    private final List<Integer> guiSlots = Collections.unmodifiableList(Arrays.asList(slotR, slotI, slotS, slotO, slotL));
 
     private final ItemStack gui0 = new ItemStack(Material.AIR, 0);
     private final ItemStack gui1 = Utils.createGuiItem(Material.BLACK_STAINED_GLASS_PANE, " ", "");
@@ -119,9 +119,35 @@ public class ItemTransfererGui implements Listener {
                     event.setCancelled(true);
                 }
             }
-            else if (event.getAction() == InventoryAction.MOVE_TO_OTHER_INVENTORY) {
+            // allow players to shift click trap doors into the gui
+            else if (event.getClickedInventory() == gui.getBottomInventory()
+                    && event.getAction() == InventoryAction.MOVE_TO_OTHER_INVENTORY) {
+
+                int slot = -1;
+                ItemStack item = event.getCurrentItem();
+                if (item != null) {
+
+                    Material token = item.getType();
+                    for (int s : guiSlots) {
+                        if (isGuiSlotTokenValid(s, token)) {
+                            if (Utils.isEmpty(gui.getTopInventory().getItem(s)))
+                            slot = s;
+                            break;
+                        }
+                    }
+                    if (slot != -1) {
+                        ItemStack transfer = item.clone();
+                        int leftover = Math.max(0, item.getAmount() - 1);
+                        int taken = item.getAmount() - leftover;
+
+                        item.setAmount(leftover);
+                        transfer.setAmount(taken);
+
+                        gui.getBottomInventory().setItem(event.getSlot(), item);
+                        gui.getTopInventory().setItem(slot, transfer);
+                    }
+                }
                 event.setCancelled(true);
-                // TODO if a slot will and can take the clicked item, split one off to that slot!
             }
         }
     }
@@ -144,23 +170,14 @@ public class ItemTransfererGui implements Listener {
     public void onInventoryClose(InventoryCloseEvent event) {
         if (event.getView() instanceof Window) {
             Window gui = (Window) event.getView();
+            gui.saveData();
             guis.remove(gui.getContainer().getBlock());
-
-            ReceivePolicy retrieve = Objects.requireNonNull(ReceivePolicy.fromToken(Utils.getMaterial(gui.view.getItem(slotR))));
-            InputPolicy input = Objects.requireNonNull(InputPolicy.fromToken(Utils.getMaterial(gui.view.getItem(slotI))));
-            ServePolicy serve = Objects.requireNonNull(ServePolicy.fromToken(Utils.getMaterial(gui.view.getItem(slotS))));
-            OutputPolicy output = Objects.requireNonNull(OutputPolicy.fromToken(Utils.getMaterial(gui.view.getItem(slotO))));
-            LiquidsPolicy liquids = Objects.requireNonNull(LiquidsPolicy.fromToken(Utils.getMaterial(gui.view.getItem(slotL))));
-
-            TransferScheme scheme = new TransferScheme(retrieve, input, serve, output, liquids);
-            scheme.applyTo(gui.getContainer());
         }
     }
 
     public void closeAllGuis() {
-        // FIXME onInventoryClose is not called when plugin is being disabled!
-
         for (Window gui : guis.values()) {
+            gui.saveData();  // inv close event isn't triggered if plugin is disabling
             gui.getPlayer().closeInventory();
         }
         guis.clear();
@@ -195,7 +212,10 @@ public class ItemTransfererGui implements Listener {
                     gui1, gui1, guiR, guiI, guiS, guiO, guiL, gui1, gui1,
                     gui2, gui2, gui0, gui0, gui0, gui0, gui0, gui2, gui2
             });
+            loadData();
+        }
 
+        public void loadData() {
             TransferScheme scheme = TransferScheme.ofContainer(container);
 
             view.setItem(slotR, new ItemStack(scheme.RECEIVE.getToken()));
@@ -203,6 +223,17 @@ public class ItemTransfererGui implements Listener {
             view.setItem(slotS, new ItemStack(scheme.SERVE.getToken()));
             view.setItem(slotO, new ItemStack(scheme.OUTPUT.getToken()));
             view.setItem(slotL, new ItemStack(scheme.LIQUIDS.getToken()));
+        }
+
+        public void saveData() {
+            ReceivePolicy retrieve = Objects.requireNonNull(ReceivePolicy.fromToken(Utils.getMaterial(view.getItem(slotR))));
+            InputPolicy input = Objects.requireNonNull(InputPolicy.fromToken(Utils.getMaterial(view.getItem(slotI))));
+            ServePolicy serve = Objects.requireNonNull(ServePolicy.fromToken(Utils.getMaterial(view.getItem(slotS))));
+            OutputPolicy output = Objects.requireNonNull(OutputPolicy.fromToken(Utils.getMaterial(view.getItem(slotO))));
+            LiquidsPolicy liquids = Objects.requireNonNull(LiquidsPolicy.fromToken(Utils.getMaterial(view.getItem(slotL))));
+
+            TransferScheme scheme = new TransferScheme(retrieve, input, serve, output, liquids);
+            scheme.applyTo(container);
         }
 
         public Container getContainer() {

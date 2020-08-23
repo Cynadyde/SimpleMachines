@@ -1,16 +1,15 @@
 package me.cynadyde.simplemachines.util;
 
-import net.minecraft.server.v1_16_R2.*;
 import org.bukkit.Bukkit;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
 import org.bukkit.block.Hopper;
-import org.bukkit.craftbukkit.v1_16_R2.block.CraftBlockEntityState;
 import org.bukkit.entity.Entity;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.spigotmc.SpigotWorldConfig;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -24,20 +23,25 @@ public class ReflectiveUtils {
     private static Class<?> obcCraftBlockEntityState;
     private static Class<?> obcCraftItemStack;
 
+    private static Constructor<?> nmsNbtCompoundConstructor;
+
     private static Method obcCraftBlockGetNMS;
-    private static Method obcCraftBlockEntityStateCopyData;
     private static Method obcCraftBlockEntityStateGetTileEntity;
     private static Method obcCraftBlockEntityStateGetSnapshot;
     private static Method obcCraftItemStackAsNewCraftStack;
     private static Method nmsItemGetDestroySpeed;
     private static Method nmsItemGetCraftingRemainingItem;
     private static Method nmsItemStackGetItem;
+    private static Method nmsTileEntityGetWorld;
+    private static Method nmsTileEntityGetPosition;
     private static Method nmsTileEntityHopperSetCooldown;
+    private static Method nmsTileEntityLoad;
+    private static Method nmsTileEntitySetLocation;
+    private static Method nmsTileEntitySave;
 
     private static Field obcCraftEntityEntity;
     private static Field obcCraftItemStackHandle;
     private static Field nmsEntityWorld;
-    private static Field nmsTileEntityWorld;
     private static Field nmsWorldSpigotConfig;
 
     public static void setLogger(Logger pluginLogger) {
@@ -63,31 +67,38 @@ public class ReflectiveUtils {
             Class<?> nmsIBlockData = Class.forName("net.minecraft.server." + version + ".IBlockData");
             Class<?> nmsItem = Class.forName("net.minecraft.server." + version + ".Item");
             Class<?> nmsItemStack = Class.forName("net.minecraft.server." + version + ".ItemStack");
+            Class<?> nmsNbtCompound = Class.forName("net.minecraft.server." + version + ".NBTTagCompound");
             Class<?> nmsTileEntity = Class.forName("net.minecraft.server." + version + ".TileEntity");
             Class<?> nmsTileEntityHopper = Class.forName("net.minecraft.server." + version + ".TileEntityHopper");
             Class<?> nmsWorld = Class.forName("net.minecraft.server." + version + ".World");
+            Class<?> nmsBlockPosition = Class.forName("net.minecraft.server.v1_16_R2.BlockPosition");
+
+            // get the needed constructors
+            nmsNbtCompoundConstructor = nmsNbtCompound.getConstructor();
 
             // get the needed methods
             obcCraftBlockGetNMS = obcCraftBlock.getDeclaredMethod("getNMS");
-            obcCraftBlockEntityStateCopyData = obcCraftBlockEntityState.getDeclaredMethod("copyData", nmsTileEntity, nmsTileEntity);
             obcCraftBlockEntityStateGetTileEntity = obcCraftBlockEntityState.getDeclaredMethod("getTileEntity");
             obcCraftBlockEntityStateGetSnapshot = obcCraftBlockEntityState.getDeclaredMethod("getSnapshot");
             obcCraftItemStackAsNewCraftStack = obcCraftItemStack.getDeclaredMethod("asNewCraftStack", nmsItem);
             nmsItemGetDestroySpeed = nmsItem.getDeclaredMethod("getDestroySpeed", nmsItemStack, nmsIBlockData);
             nmsItemGetCraftingRemainingItem = nmsItem.getDeclaredMethod("getCraftingRemainingItem");
             nmsItemStackGetItem = nmsItemStack.getDeclaredMethod("getItem");
+            nmsTileEntityGetWorld = nmsTileEntity.getDeclaredMethod("getWorld");
+            nmsTileEntityGetPosition = nmsTileEntity.getDeclaredMethod("getPosition");
             nmsTileEntityHopperSetCooldown = nmsTileEntityHopper.getDeclaredMethod("setCooldown", int.class);
+            nmsTileEntityLoad = nmsTileEntity.getDeclaredMethod("load", nmsIBlockData, nmsNbtCompound);
+            nmsTileEntitySetLocation = nmsTileEntity.getDeclaredMethod("setLocation", nmsWorld, nmsBlockPosition);
+            nmsTileEntitySave = nmsTileEntity.getDeclaredMethod("save", nmsNbtCompound);
 
             // get the needed fields
             obcCraftEntityEntity = obcCraftEntity.getDeclaredField("entity");
             obcCraftItemStackHandle = obcCraftItemStack.getDeclaredField("handle");
             nmsEntityWorld = nmsEntity.getDeclaredField("world");
-            nmsTileEntityWorld = nmsTileEntity.getDeclaredField("world");
             nmsWorldSpigotConfig = nmsWorld.getField("spigotConfig");
 
-            // make sure the fields and methods are accessible
+            // make sure everything is accessible
             obcCraftBlockGetNMS.setAccessible(true);
-            obcCraftBlockEntityStateCopyData.setAccessible(true);
             obcCraftBlockEntityStateGetTileEntity.setAccessible(true);
             obcCraftBlockEntityStateGetSnapshot.setAccessible(true);
             obcCraftEntityEntity.setAccessible(true);
@@ -97,7 +108,11 @@ public class ReflectiveUtils {
             nmsItemGetCraftingRemainingItem.setAccessible(true);
             nmsItemStackGetItem.setAccessible(true);
             nmsEntityWorld.setAccessible(true);
-            nmsTileEntityWorld.setAccessible(true);
+            nmsTileEntityGetWorld.setAccessible(true);
+            nmsTileEntityGetPosition.setAccessible(true);
+            nmsTileEntityLoad.setAccessible(true);
+            nmsTileEntitySetLocation.setAccessible(true);
+            nmsTileEntitySave.setAccessible(true);
             nmsTileEntityHopperSetCooldown.setAccessible(true);
             nmsWorldSpigotConfig.setAccessible(true);
         }
@@ -139,78 +154,29 @@ public class ReflectiveUtils {
     }
 
     public static void copyBlockState(BlockState source, BlockState dest) {
-
-        // TODO tidy up
-
+        if (source == null || dest == null || !source.getClass().equals(dest.getClass())) {
+            throw new IllegalArgumentException("source and dest must be non-null and have the same class.");
+        }
         try {
-            System.out.println("Attempting to copy block state from " + source + " to " + dest);
             if (obcCraftBlockEntityState.isInstance(dest) && obcCraftBlockEntityState.isInstance(source)) {
+                // modifies dest's tile entity snapshot so that its next update applies changes to the world
 
-//                TileEntity sourceTileEnt = (TileEntity) obcCraftBlockEntityStateGetTileEntity.invoke(source);
-                TileEntity sourceTileEnt = (TileEntity) obcCraftBlockEntityStateGetSnapshot.invoke(source);
-                TileEntity destTileEnt = (TileEntity) obcCraftBlockEntityStateGetSnapshot.invoke(dest);
+                Object sourceTileEnt = obcCraftBlockEntityStateGetSnapshot.invoke(source);
+                Object destTileEnt = obcCraftBlockEntityStateGetSnapshot.invoke(dest);
 
-                NBTTagCompound sourceNbt = sourceTileEnt.save(new NBTTagCompound());
-                System.out.println("the nbt being copied is: " + sourceNbt);
+                Object sourceNbt = nmsTileEntitySave.invoke(sourceTileEnt, nmsNbtCompoundConstructor.newInstance());
 
-                World world = destTileEnt.getWorld();
-                BlockPosition pos = destTileEnt.getPosition();
-                sourceTileEnt.setLocation(world, pos);
+                Object destWorld = nmsTileEntityGetWorld.invoke(destTileEnt);
+                Object destPos = nmsTileEntityGetPosition.invoke(destTileEnt);
+                Object destBlockData = obcCraftBlockGetNMS.invoke(dest.getBlock());
 
-                sourceNbt = sourceTileEnt.save(new NBTTagCompound());
-                System.out.println("the nbt being copied is now: " + sourceNbt);
+                nmsTileEntitySetLocation.invoke(sourceTileEnt, destWorld, destPos);
+                nmsTileEntityLoad.invoke(destTileEnt, destBlockData, sourceNbt);
 
-                destTileEnt.load((IBlockData) obcCraftBlockGetNMS.invoke(dest.getBlock()), sourceNbt);
-                NBTTagCompound destNbt = destTileEnt.save(new NBTTagCompound());
-                System.out.println("the dest tile entity snapshot is: " + destNbt);
-
-//                System.out.println("source tile entity: " + sourceTileEnt);
-//                System.out.println("dest tile entity: " + destTileEnt);
-
-                /*sourceTileEnt.setLocation(destTileEnt.getWorld(), destTileEnt.getPosition());
-                destTileEnt.getWorld().setTileEntity(destTileEnt.getPosition(), sourceTileEnt);*/
-
-//                CraftBlockEntityState<?> state = new CraftBlockEntityState<>(source.getType(), sourceTileEnt);
-
-//                CraftBlockEntityState<?> state = (CraftBlockEntityState<?>) dest.getBlock().getState();
-
-                boolean result = dest.update(true, true);
-                if (!result) {
-                    System.out.println("could NOT update blocks state!");
-                }
-                else {
-                    System.out.println("update successful!");
-                }
-
-                System.out.println("nbt: " + ((CraftBlockEntityState<?>) dest).getSnapshotNBT());
-
-//                NBTTagCompound sourceNbt = ((TileEntity) sourceTileEnt).save(new NBTTagCompound());
-//                NBTTagCompound destNbt = ((TileEntity) destTileEnt).save(new NBTTagCompound());
-
-//                Class<?> nmsTileEntity = Class.forName("net.minecraft.server.v1_16_R2.TileEntity");
-//                Class<?> nmsNBTTagCompound = Class.forName("net.minecraft.server.v1_16_R2.NBTTagCompound");
-//                Method nmsTileEntitySave = nmsTileEntity.getDeclaredMethod("save", nmsNBTTagCompound);
-//                Constructor<?> nmsNBTTagCompoundNew = nmsNBTTagCompound.getConstructor();
-//
-//                Object sourceNbt = nmsTileEntitySave.invoke(sourceTileEnt, nmsNBTTagCompoundNew.newInstance());
-//                Object destNbt = nmsTileEntitySave.invoke(destTileEnt, nmsNBTTagCompoundNew.newInstance());
-
-//                System.out.println("sourceTileEnt: " + sourceNbt);
-//                System.out.println("destTileEnt: " + destNbt);
-
-//                obcCraftBlockEntityStateCopyData.invoke(dest, sourceTileEnt, destTileEnt);
-//                obcCraftBlockEntityStateApplyTo.invoke(source, obcCraftBlockEntityStateTileEntity.get(dest));
-//                System.out.println("forcing an update of the dest");
-//                boolean result = dest.update(true, true);
-//                if (!result) System.out.println("could NOT update dest");
-
-//                Object resultTileEnt = obcCraftBlockEntityStateGetTileEntity.invoke(dest);
-//                NBTTagCompound resultNbt = ((TileEntity) resultTileEnt).save(new NBTTagCompound());
-//
-//                System.out.println("NEW destTileEnt: " + resultNbt);
+                dest.update(true, true);
             }
         }
-        catch (ClassCastException | IllegalAccessException | InvocationTargetException | NullPointerException ex) {
+        catch (ClassCastException | IllegalAccessException | InvocationTargetException | InstantiationException | NullPointerException ex) {
             logReflectionError("TileEntity#applyTo()", ex);
         }
     }
@@ -218,7 +184,7 @@ public class ReflectiveUtils {
     public static SpigotWorldConfig getWorldConfigFor(InventoryHolder holder) {
         try {
             if (holder instanceof BlockState) {
-                return (SpigotWorldConfig) nmsWorldSpigotConfig.get(nmsTileEntityWorld.get(obcCraftBlockEntityStateGetTileEntity.invoke(holder)));
+                return (SpigotWorldConfig) nmsWorldSpigotConfig.get(nmsTileEntityGetWorld.invoke(obcCraftBlockEntityStateGetTileEntity.invoke(holder)));
             }
             else if (holder instanceof Entity) {
                 return (SpigotWorldConfig) nmsWorldSpigotConfig.get(nmsEntityWorld.get(obcCraftEntityEntity.get(holder)));
