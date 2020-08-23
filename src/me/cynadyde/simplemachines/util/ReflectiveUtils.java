@@ -44,6 +44,7 @@ public class ReflectiveUtils {
     private static Method obcCraftBlockGetPosition;
     private static Method obcCraftBlockEntityStateGetTileEntity;
     private static Method obcCraftBlockEntityStateGetSnapshot;
+    private static Method obcCraftBlockEntityStateLoad;
     private static Method obcCraftItemStackAsNewCraftStack;
     private static Method obcCraftWorldGetHandle;
     private static Method nmsBlockGetBlockData;
@@ -57,6 +58,7 @@ public class ReflectiveUtils {
     private static Method nmsTileEntityHopperSetCooldown;
     private static Method nmsTileEntityLoad;
     private static Method nmsTileEntitySetLocation;
+    private static Method nmsTileEntitySetPosition;
     private static Method nmsTileEntitySave;
 
     private static Field obcCraftEntityEntity;
@@ -71,6 +73,10 @@ public class ReflectiveUtils {
     private static void logReflectionError(String name, Exception ex) {
         logger.severe("could not perform " + name + " reflection due to "
                 + ex.getClass().getName() + ": " + ex.getMessage());
+
+        if (!(ex instanceof ReflectiveOperationException)) {
+            ex.printStackTrace();
+        }
     }
 
     public static void reflect() {
@@ -106,6 +112,7 @@ public class ReflectiveUtils {
             obcCraftBlockGetPosition = obcCraftBlock.getDeclaredMethod("getPosition");
             obcCraftBlockEntityStateGetTileEntity = obcCraftBlockEntityState.getDeclaredMethod("getTileEntity");
             obcCraftBlockEntityStateGetSnapshot = obcCraftBlockEntityState.getDeclaredMethod("getSnapshot");
+            obcCraftBlockEntityStateLoad = obcCraftBlockEntityState.getDeclaredMethod("load", nmsTileEntity);
             obcCraftItemStackAsNewCraftStack = obcCraftItemStack.getDeclaredMethod("asNewCraftStack", nmsItem);
             obcCraftWorldGetHandle = obcCraftWorld.getDeclaredMethod("getHandle");
             nmsBlockGetBlockData = nmsBlock.getDeclaredMethod("getBlockData");
@@ -119,8 +126,8 @@ public class ReflectiveUtils {
             nmsTileEntityHopperSetCooldown = nmsTileEntityHopper.getDeclaredMethod("setCooldown", int.class);
             nmsTileEntityLoad = nmsTileEntity.getDeclaredMethod("load", nmsIBlockData, nmsNbtCompound);
             nmsTileEntitySetLocation = nmsTileEntity.getDeclaredMethod("setLocation", nmsWorld, nmsBlockPosition);
+            nmsTileEntitySetPosition = nmsTileEntity.getDeclaredMethod("setPosition", nmsBlockPosition);
             nmsTileEntitySave = nmsTileEntity.getDeclaredMethod("save", nmsNbtCompound);
-//            nmsWorldApplyPhysics = nmsWorld.getDeclaredMethod("applyPhysics", nmsBlockPosition, nmsBlock);
 
             // get the needed fields
             obcCraftEntityEntity = obcCraftEntity.getDeclaredField("entity");
@@ -133,6 +140,7 @@ public class ReflectiveUtils {
             obcCraftBlockGetPosition.setAccessible(true);
             obcCraftBlockEntityStateGetTileEntity.setAccessible(true);
             obcCraftBlockEntityStateGetSnapshot.setAccessible(true);
+            obcCraftBlockEntityStateLoad.setAccessible(true);
             obcCraftEntityEntity.setAccessible(true);
             obcCraftItemStackAsNewCraftStack.setAccessible(true);
             obcCraftItemStackHandle.setAccessible(true);
@@ -148,10 +156,10 @@ public class ReflectiveUtils {
             nmsTileEntityGetPosition.setAccessible(true);
             nmsTileEntityLoad.setAccessible(true);
             nmsTileEntitySetLocation.setAccessible(true);
+            nmsTileEntitySetPosition.setAccessible(true);
             nmsTileEntitySave.setAccessible(true);
             nmsTileEntityHopperSetCooldown.setAccessible(true);
             nmsWorldSpigotConfig.setAccessible(true);
-//            nmsWorldApplyPhysics.setAccessible(true);
         }
         catch (ClassNotFoundException | NoSuchMethodException | NoSuchFieldException ex) {
             logReflectionError("initial", ex);
@@ -161,15 +169,13 @@ public class ReflectiveUtils {
     public static ItemStack getCraftingRemainder(ItemStack item) {
         try {
             if (obcCraftItemStack.isInstance(item)) {
-                // net.minecraft.server.v1_16_R1.Item nmsItem = ((CraftItemStack) c).handle.getItem().getCraftingRemainingItem();
-                // ItemStack item = CraftItemStack.asNewCraftStack(nmsItem);
                 Object nmsItemObj = nmsItemStackGetItem.invoke(obcCraftItemStackHandle.get(item));
                 Object nmsItemObjResult = nmsItemGetCraftingRemainingItem.invoke(nmsItemObj);
                 ItemStack result = (ItemStack) obcCraftItemStackAsNewCraftStack.invoke(nmsItemObjResult);
                 return Utils.isEmpty(result) ? null : result;
             }
         }
-        catch (ClassCastException | IllegalAccessException | InvocationTargetException | NullPointerException ex) {
+        catch (IllegalAccessException | InvocationTargetException | ClassCastException | NullPointerException ex) {
             logReflectionError("Item#getCraftingRemainingItem()", ex);
         }
         return null;
@@ -184,47 +190,13 @@ public class ReflectiveUtils {
                 return (float) nmsItemGetDestroySpeed.invoke(item, itemStack, blockData) > 1.0F;
             }
         }
-        catch (ClassCastException | IllegalAccessException | InvocationTargetException | NullPointerException ex) {
+        catch (IllegalAccessException | InvocationTargetException | ClassCastException | NullPointerException ex) {
             logReflectionError("Item#getDestroySpeed()", ex);
         }
         return false;
     }
 
-    public static void copyBlockState(BlockState source, BlockState dest) {
-        // FIXME lines on sign didn't seem to be retained
-
-        if (source == null || dest == null || !source.getClass().equals(dest.getClass())) {
-            throw new IllegalArgumentException("source and dest must be non-null and have the same class.");
-        }
-        try {
-            if (obcCraftBlockEntityState.isInstance(dest) && obcCraftBlockEntityState.isInstance(source)) {
-                // modifies dest's tile entity snapshot so that its next update applies changes to the world
-
-                Object sourceTileEnt = obcCraftBlockEntityStateGetSnapshot.invoke(source);
-                Object destTileEnt = obcCraftBlockEntityStateGetSnapshot.invoke(dest);
-
-                Object sourceNbt = nmsTileEntitySave.invoke(sourceTileEnt, nmsNbtCompoundConstructor.newInstance());
-
-                Object destWorld = nmsTileEntityGetWorld.invoke(destTileEnt);
-                Object destPos = nmsTileEntityGetPosition.invoke(destTileEnt);
-                Object destBlockData = obcCraftBlockGetNMS.invoke(dest.getBlock());
-
-                nmsTileEntitySetLocation.invoke(sourceTileEnt, destWorld, destPos);
-                nmsTileEntityLoad.invoke(destTileEnt, destBlockData, sourceNbt);
-            }
-        }
-        catch (ClassCastException | IllegalAccessException | InvocationTargetException | InstantiationException | NullPointerException ex) {
-            logReflectionError("TileEntity#applyTo()", ex);
-        }
-    }
-
     public static boolean canPlaceOn(ItemStack item, Block block) {
-
-//        net.minecraft.server.v1_16_R2.World nmsWorldObj = ((CraftWorld) block.getWorld()).getHandle();
-//        net.minecraft.server.v1_16_R2.BlockPosition nmsBlockPositionObj = ((CraftBlock) block).getPosition();
-//        net.minecraft.server.v1_16_R2.IBlockData nmsBlockDataObj = ((CraftBlock) block).getNMS();
-//        return nmsBlockDataObj.canPlace(nmsWorldObj, nmsBlockPositionObj);
-
         try {
             Object nmsWorldObj = obcCraftWorldGetHandle.invoke(block.getWorld());
             Object nmsBlockPositionObj = obcCraftBlockGetPosition.invoke(block);
@@ -236,26 +208,56 @@ public class ReflectiveUtils {
                 Object nmsBlockObj = nmsItemBlockGetBlock.invoke(nmsItemObj);
                 Object nmsBlockDataObj = nmsBlockGetBlockData.invoke(nmsBlockObj);
 
-                boolean canPlace = (boolean) nmsBlockDataCanPlace.invoke(nmsBlockDataObj, nmsWorldObj, nmsBlockPositionObj);
-
-                System.out.println("nmsWorldObj: " + nmsWorldObj);
-                System.out.println("nmsBlockPositionObj: " + nmsBlockPositionObj);
-                System.out.println("nmsItemStackObj: " + nmsItemStackObj);
-                System.out.println("nmsItemObj: " + nmsItemObj);
-                System.out.println("nmsBlockObj: " + nmsBlockObj);
-                System.out.println("nmsBlockDataObj: " + nmsBlockDataObj);
-                System.out.println("canPlace: " + canPlace);
-
-                return canPlace;
-            }
-            else {
-                System.out.println("Item was not an item block!");
+                return (boolean) nmsBlockDataCanPlace.invoke(nmsBlockDataObj, nmsWorldObj, nmsBlockPositionObj);
             }
         }
-        catch (ClassCastException | IllegalAccessException | InvocationTargetException | NullPointerException ex) {
+        catch (IllegalAccessException | InvocationTargetException | ClassCastException | NullPointerException ex) {
             logReflectionError("IBlockData#canPlace()", ex);
         }
         return false;
+    }
+
+    public static void copyBlockState(BlockState source, BlockState dest) {
+
+        if (source == null || dest == null || !source.getClass().equals(dest.getClass())) {
+            throw new IllegalArgumentException("source and dest must be non-null and have the same class.");
+        }
+        try {
+            if (obcCraftBlockEntityState.isInstance(dest) && obcCraftBlockEntityState.isInstance(source)) {
+                // modifies dest's tile entity snapshot so that its next update applies changes to the world
+
+                Object sourceTileEnt = obcCraftBlockEntityStateGetSnapshot.invoke(source);
+                Object destTileEnt = obcCraftBlockEntityStateGetSnapshot.invoke(dest);
+                System.out.println("sourceTileEnt: " + sourceTileEnt);
+                System.out.println("destTileEnt: " + destTileEnt);
+
+                Object destNbt = nmsTileEntitySave.invoke(destTileEnt, nmsNbtCompoundConstructor.newInstance());
+                Object sourceNbt = nmsTileEntitySave.invoke(sourceTileEnt, nmsNbtCompoundConstructor.newInstance());
+                System.out.println("destNbt: " + destNbt);
+                System.out.println("sourceNbt: " + sourceNbt);
+
+                obcCraftBlockEntityStateLoad.invoke(dest, obcCraftBlockEntityStateGetSnapshot.invoke(source));
+
+//                ((CraftBlockEntityState<?>) dest).load(((CraftBlockEntityState<?>) source).getSnapshot());
+
+//                Object destPos = nmsTileEntityGetPosition.invoke(destTileEnt);
+//                Object destBlockData = obcCraftBlockGetNMS.invoke(dest.getBlock());
+//                System.out.println("destPos: " + destPos);
+//                System.out.println("destBlockData: " + destBlockData);
+//
+//                nmsTileEntitySetPosition.invoke(sourceTileEnt, destPos);
+//                nmsTileEntityLoad.invoke(destTileEnt, destBlockData, sourceNbt);
+
+                destNbt = nmsTileEntitySave.invoke(destTileEnt, nmsNbtCompoundConstructor.newInstance());
+                sourceNbt = nmsTileEntitySave.invoke(sourceTileEnt, nmsNbtCompoundConstructor.newInstance());
+
+                System.out.println("destNbt: " + destNbt);
+                System.out.println("sourceNbt: " + sourceNbt);
+            }
+        }
+        catch (IllegalAccessException | InvocationTargetException | InstantiationException | ClassCastException | NullPointerException ex) {
+            logReflectionError("TileEntity#applyTo()", ex);
+        }
     }
 
     public static SpigotWorldConfig getWorldConfigFor(InventoryHolder holder) {
@@ -267,7 +269,7 @@ public class ReflectiveUtils {
                 return (SpigotWorldConfig) nmsWorldSpigotConfig.get(nmsEntityWorld.get(obcCraftEntityEntity.get(holder)));
             }
         }
-        catch (ClassCastException | IllegalAccessException | InvocationTargetException | NullPointerException ex) {
+        catch (IllegalAccessException | InvocationTargetException | ClassCastException | NullPointerException ex) {
             logReflectionError("InventoryHolder...World#spigotConfig", ex);
         }
         return null;
@@ -277,7 +279,7 @@ public class ReflectiveUtils {
         try {
             nmsTileEntityHopperSetCooldown.invoke(obcCraftBlockEntityStateGetTileEntity.invoke(hopper), cooldown);
         }
-        catch (ClassCastException | IllegalAccessException | InvocationTargetException | NullPointerException ex) {
+        catch (IllegalAccessException | InvocationTargetException | ClassCastException | NullPointerException ex) {
             logReflectionError("TileEntityHopper#cooldown", ex);
         }
     }

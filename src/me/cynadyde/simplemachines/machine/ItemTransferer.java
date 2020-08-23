@@ -26,6 +26,9 @@ import java.util.Iterator;
 
 public class ItemTransferer implements Listener {
 
+    // TODO click with bucket to pour into (policy permitting)
+    // TODO hoppers suck in liquids above it (policy permitting)
+
     private final SimpleMachinesPlugin plugin;
     private InventoryMoveItemEvent lastSpammedInvMoveItemEvent;
 

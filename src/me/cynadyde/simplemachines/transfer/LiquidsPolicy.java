@@ -23,7 +23,7 @@ public enum LiquidsPolicy implements TransferPolicy {
         }
     },
 
-    FLOW {
+    POUR_INTO {
         @Override
         public boolean isFlowing(ItemStack item) {
             return item != null && Utils.FILLED_BUCKETS.contains(item.getType()) && item.getAmount() == 1;
