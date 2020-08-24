@@ -56,6 +56,7 @@ public class Utils {
      * A list of all bucket materials.
      */
     public static final List<Material> BUCKETS;
+
     static {
         List<Material> buckets = new ArrayList<>(FILLED_BUCKETS);
         buckets.add(Material.BUCKET);

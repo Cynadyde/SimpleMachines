@@ -1,8 +1,13 @@
 package me.cynadyde.simplemachines.util;
 
+import net.minecraft.server.v1_16_R2.BlockPosition;
+import net.minecraft.server.v1_16_R2.PacketPlayOutBlockBreakAnimation;
 import org.bukkit.Bukkit;
 import org.bukkit.block.*;
+import org.bukkit.craftbukkit.v1_16_R2.block.CraftBlock;
+import org.bukkit.craftbukkit.v1_16_R2.entity.CraftPlayer;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.Player;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.SkullMeta;
@@ -12,6 +17,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.Objects;
 import java.util.logging.Logger;
 
 public class ReflectiveUtils {
@@ -298,5 +304,11 @@ public class ReflectiveUtils {
         catch (IllegalAccessException | InvocationTargetException | ClassCastException | NullPointerException ex) {
             logReflectionError("TileEntityHopper#cooldown", ex);
         }
+    }
+
+    public static void updateBlockBreakAnimation(int id, Block block, int stage, Player player) {
+        BlockPosition pos = ((CraftBlock) block).getPosition();
+        PacketPlayOutBlockBreakAnimation packet = new PacketPlayOutBlockBreakAnimation(id, pos, stage);
+        ((CraftPlayer) player).getHandle().playerConnection.sendPacket(packet);
     }
 }
