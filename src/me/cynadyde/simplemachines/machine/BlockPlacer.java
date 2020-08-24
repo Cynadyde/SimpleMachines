@@ -3,7 +3,6 @@ package me.cynadyde.simplemachines.machine;
 import me.cynadyde.simplemachines.SimpleMachinesPlugin;
 import me.cynadyde.simplemachines.util.RandomPermuteIterator;
 import me.cynadyde.simplemachines.util.ReflectiveUtils;
-import org.bukkit.Bukkit;
 import org.bukkit.Effect;
 import org.bukkit.Material;
 import org.bukkit.block.*;
@@ -11,14 +10,10 @@ import org.bukkit.block.data.BlockData;
 import org.bukkit.block.data.Directional;
 import org.bukkit.block.data.Rotatable;
 import org.bukkit.block.data.Waterlogged;
-import org.bukkit.craftbukkit.v1_16_R2.block.CraftSkull;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockDispenseEvent;
 import org.bukkit.event.block.BlockFormEvent;
-import org.bukkit.event.block.BlockPlaceEvent;
-import org.bukkit.event.block.BlockSpreadEvent;
-import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.inventory.InventoryMoveItemEvent;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
@@ -61,7 +56,7 @@ public class BlockPlacer implements Listener {
     }
 
     public boolean isBlockPlacingMachine(Block block) {
-        if (block.getType() == Material.DROPPER) {
+        if (block.getType() == Material.DISPENSER) {
             Block part = block.getRelative(BlockFace.UP);
             return part.getType() == Material.PISTON
                     && ((Directional) part.getBlockData()).getFacing() == BlockFace.DOWN;
@@ -72,7 +67,7 @@ public class BlockPlacer implements Listener {
     public void doBlockPlace(Block machine) {
         if (isBlockPlacingMachine(machine)) {
 
-            Dropper dropper = (Dropper) machine.getState();
+            Dispenser dropper = (Dispenser) machine.getState();
             BlockFace facing = ((Directional) dropper.getBlockData()).getFacing();
 
             Block dest = machine.getRelative(facing, 1);

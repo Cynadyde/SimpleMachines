@@ -9,7 +9,9 @@ public enum PluginKey {
     OUTPUT_POLICY,
     SERVE_POLICY,
     RECEIVE_POLICY,
-    LIQUIDS_POLICY;
+    LIQUIDS_POLICY,
+    LATEST_SLOT,
+    ;
 
     private NamespacedKey obj;
 

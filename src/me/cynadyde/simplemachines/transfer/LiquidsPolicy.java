@@ -8,12 +8,12 @@ public enum LiquidsPolicy implements TransferPolicy {
 
     NORMAL {
         @Override
-        public boolean isFlowing(ItemStack item) {
+        public boolean isDrainable(ItemStack item) {
             return false;
         }
 
         @Override
-        public boolean isDrained(ItemStack item) {
+        public boolean isFillable(ItemStack item) {
             return false;
         }
 
@@ -25,20 +25,24 @@ public enum LiquidsPolicy implements TransferPolicy {
 
     POUR_INTO {
         @Override
-        public boolean isFlowing(ItemStack item) {
-            return item != null && Utils.FILLED_BUCKETS.contains(item.getType()) && item.getAmount() == 1;
+        public boolean isDrainable(ItemStack item) {
+            return item != null && item.getAmount() == 1 && Utils.FILLED_BUCKETS.contains(item.getType());
         }
 
         @Override
-        public boolean isDrained(ItemStack item) {
-            return item != null && item.getType() == Material.BUCKET && item.getAmount() == 1;
+        public boolean isFillable(ItemStack item) {
+            return item != null && item.getAmount() == 1 && item.getType() == Material.BUCKET;
         }
 
         @Override
         public Material getToken() {
-            return Material.IRON_TRAPDOOR;
+            return Material.JUNGLE_TRAPDOOR;
         }
     };
+
+    public abstract boolean isDrainable(ItemStack item);
+
+    public abstract boolean isFillable(ItemStack item);
 
     public static LiquidsPolicy fromToken(Material token) {
         for (LiquidsPolicy policy : values()) {
@@ -48,8 +52,4 @@ public enum LiquidsPolicy implements TransferPolicy {
         }
         return null;
     }
-
-    public abstract boolean isFlowing(ItemStack item);
-
-    public abstract boolean isDrained(ItemStack item);
 }

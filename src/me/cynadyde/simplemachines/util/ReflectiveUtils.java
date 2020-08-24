@@ -71,6 +71,8 @@ public class ReflectiveUtils {
     private static Field nmsEntityWorld;
     private static Field nmsWorldSpigotConfig;
 
+    private ReflectiveUtils() {}
+
     public static void setLogger(Logger pluginLogger) {
         logger = pluginLogger;
     }
@@ -256,6 +258,7 @@ public class ReflectiveUtils {
     }
 
     public static void setCustomContainerName(Container container, String name) {
+        // necessary because the API for some reason doesn't mark all container types as Nameable
         try {
             obcCraftContainerSetCustomName.invoke(container, name);
         }

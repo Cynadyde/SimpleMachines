@@ -27,6 +27,8 @@ import java.util.Objects;
 
 public class BlockBreaker implements Listener {
 
+    // TODO see about having the block be mined over a duration with cracks
+
     private final SimpleMachinesPlugin plugin;
 
     public BlockBreaker(SimpleMachinesPlugin plugin) {

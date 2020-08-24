@@ -63,7 +63,7 @@ public class AutoCrafter implements Listener {
     public void doAutoCraft(Block block) {
         if (isAutoCrafterMachine(block)) {
             Dropper dropper = ((Dropper) block.getState());
-            OutputPolicy output = TransferScheme.ofInventory(dropper.getInventory()).OUTPUT;
+            OutputPolicy output = TransferScheme.ofHolder(dropper).OUTPUT;
 
             ItemStack[] contents = dropper.getInventory().getContents();
             ItemStack[] ingredients = calcIngredients(contents, output);

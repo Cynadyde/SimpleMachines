@@ -4,6 +4,7 @@ import me.cynadyde.simplemachines.SimpleMachinesPlugin;
 import me.cynadyde.simplemachines.transfer.*;
 import me.cynadyde.simplemachines.util.PluginKey;
 import me.cynadyde.simplemachines.util.ReflectiveUtils;
+import me.cynadyde.simplemachines.util.Utils;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.BlockState;
@@ -16,6 +17,8 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.inventory.InventoryMoveItemEvent;
 import org.bukkit.event.inventory.InventoryPickupItemEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.inventory.EntityEquipment;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
@@ -26,7 +29,6 @@ import java.util.Iterator;
 
 public class ItemTransferer implements Listener {
 
-    // TODO click with bucket to pour into (policy permitting)
     // TODO hoppers suck in liquids above it (policy permitting)
 
     private final SimpleMachinesPlugin plugin;
@@ -37,21 +39,16 @@ public class ItemTransferer implements Listener {
         this.lastSpammedInvMoveItemEvent = null;
     }
 
-    @EventHandler(ignoreCancelled = true)
+    @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onBlockBreak(BlockBreakEvent event) {
+        // anti grief plugins should have been able to cancel the event by now
         BlockState state = event.getBlock().getState();
         if (state instanceof Container) {
-            TransferScheme scheme = TransferScheme.ofContainer((Container) state);
+            TransferScheme scheme = TransferScheme.ofHolder((Container) state);
 
             if (scheme.isNonNormal()) {
                 Location dest = state.getLocation().add(0.5, 0.5, 0.5);
-                for (TransferPolicy policy : new TransferPolicy[] {
-                        scheme.RECEIVE,
-                        scheme.INPUT,
-                        scheme.SERVE,
-                        scheme.OUTPUT,
-                        scheme.LIQUIDS
-                }) {
+                for (TransferPolicy policy : scheme.getPolicies()) {
                     if (!policy.getToken().isAir()) {
                         state.getWorld().dropItemNaturally(dest, new ItemStack(policy.getToken()));
                     }
@@ -68,26 +65,53 @@ public class ItemTransferer implements Listener {
         }
     }
 
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
+    public void onPlayerInteract(PlayerInteractEvent event) {
+        // click filled bucket to container with empty bucket to deposit liquids
+        // anti grief plugins should have been able to cancel the event by now
+        if (event.getItem() != null) {
+            ItemStack item = event.getItem();
+            if (item.getAmount() == 1 && Utils.FILLED_BUCKETS.contains(item.getType())) {
+                if (event.getClickedBlock() != null) {
+                    BlockState state = event.getClickedBlock().getState();
+                    if (state instanceof Container) {
+                        TransferScheme scheme = TransferScheme.ofHolder((Container) state);
+                        if (scheme.LIQUIDS == LiquidsPolicy.POUR_INTO) {
+
+                            Inventory dest = ((Container) state).getInventory();
+                            int leftovers = performItemInput(dest, item, scheme);
+                            if (leftovers == 0) {
+                                EntityEquipment equipment = event.getPlayer().getEquipment();
+                                if (equipment != null) {
+                                    equipment.setItemInMainHand(new ItemStack(Material.BUCKET, 1));
+                                }
+                                event.setCancelled(true);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
     public void onInventoryPickupItem(InventoryPickupItemEvent event) {
         final Inventory dest = event.getInventory();
-        TransferScheme scheme = TransferScheme.ofInventory(dest);
+        final TransferScheme scheme = TransferScheme.ofHolder(dest.getHolder());
 
         boolean takeover = scheme.isNonNormal();
 
         if (takeover) {
             final Item s = event.getItem();
-            final ReceivePolicy r = scheme.RECEIVE;
-            final InputPolicy i = scheme.INPUT;
 
             /* cancel and mimic the event with all the needed control. */
-            event.setCancelled(true);
-            Runnable task = () -> performItemTransfer(s, dest, r, i);
+            event.setCancelled(true); // lets hope other plugins don't un-cancel!
+            Runnable task = () -> performItemTransfer(s, dest, scheme);
             plugin.getServer().getScheduler().runTaskLater(plugin, task, 0L);
         }
     }
 
-    @EventHandler(priority = EventPriority.LOWEST)
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
     public void onSpammedInventoryMoveItem(InventoryMoveItemEvent event) {
         /* prevent hoppers from immediately trying to pull items from
                another container again when the event is cancelled. */
@@ -101,7 +125,7 @@ public class ItemTransferer implements Listener {
                     && event.getSource().equals(prevEvent.getSource())
                     && event.getDestination().equals(prevEvent.getDestination())) {
 
-                event.setCancelled(true);
+                event.setCancelled(true); // lets hope other plugins don't un-cancel!
             }
             // this is run on the first...
             else {
@@ -120,50 +144,42 @@ public class ItemTransferer implements Listener {
         }
     }
 
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
     public void onInventoryMoveItem(InventoryMoveItemEvent event) {
         final Inventory source = event.getSource();
         final Inventory dest = event.getDestination();
-
-        TransferScheme scheme = TransferScheme.ofInventory(dest);
+        final TransferScheme scheme = TransferScheme.ofTransaction(source, dest);
 
         boolean takeover = scheme.isNonNormal();
 
         if (takeover) {
-            event.setCancelled(true);
+            event.setCancelled(true); // lets hope other plugins don't un-cancel!
 
             /* get the transfer amount from the spigot config since the event's item
                could just be a partial amount due to too few slot contents to take. */
             final int amount = getHopperTransferAmount(source.getHolder());
-
             final boolean pushed = event.getInitiator() == event.getSource();
-            final ServePolicy s = scheme.SERVE;
-            final OutputPolicy o = scheme.OUTPUT;
-            final ReceivePolicy r = scheme.RECEIVE;
-            final InputPolicy i = scheme.INPUT;
-            final LiquidsPolicy l = scheme.LIQUIDS;
 
             /* now, mimic the event with all the needed control. */
-            Runnable task = () -> performItemTransfer(source, dest, amount, pushed, s, o, r, i, l);
+            Runnable task = () -> performItemTransfer(source, dest, amount, pushed, scheme);
             plugin.getServer().getScheduler().runTaskLater(plugin, task, 0L);
         }
     }
 
-    public void performItemTransfer(Inventory source, Inventory dest, int amount, boolean pushed,
-            ServePolicy serve, OutputPolicy output, ReceivePolicy receive, InputPolicy input, LiquidsPolicy liquids) {
+    public void performItemTransfer(Inventory source, Inventory dest, int amount, boolean pushed, TransferScheme scheme) {
 
         if (isTargeted(source, dest)) {
             System.out.println("++++++++++++++");
-            System.out.println("SOURCE " + source.getType() + " has Serve." + serve + " and Output." + output);
-            System.out.println("DEST " + dest.getType() + " has Retrieve." + receive + " and Input." + input);
+            System.out.println("SOURCE " + source.getType() + " has Serve." + scheme.SERVE + " and Output." + scheme.OUTPUT);
+            System.out.println("DEST " + dest.getType() + " has Receive." + scheme.RECEIVE + " and Input." + scheme.INPUT);
         }
 
-        Iterator<Integer> slots = serve.getIterator(source.getSize());
+        Iterator<Integer> slots = scheme.SERVE.getIterator(source.getHolder());
         while (slots.hasNext()) {
             int slot = slots.next();
 
             ItemStack current = source.getItem(slot);
-            if (output.testSlot(current) && !liquids.isDrained(current)) {
+            if (scheme.OUTPUT.testSlot(current) && !scheme.LIQUIDS.isFillable(current)) {
 
                 ItemStack transfer = current.clone();
 
@@ -174,9 +190,9 @@ public class ItemTransferer implements Listener {
                     System.out.println("TAKING " + transfer + " FROM SOURCE SLOT " + slot + " LEAVING " + current);
                 }
 
-                int leftover = performItemInput(source, dest, transfer, receive, input, liquids);
+                int leftover = performItemInput(dest, transfer, scheme);
 
-                if (liquids.isFlowing(current) && leftover == 0) {
+                if (scheme.LIQUIDS.isDrainable(current) && leftover == 0) {
                     // the contents of the bucket are transferred, but not the bucket
                     current.setType(Material.BUCKET);
                 }
@@ -208,15 +224,15 @@ public class ItemTransferer implements Listener {
         }
     }
 
-    public void performItemTransfer(Item item, Inventory dest, ReceivePolicy receive, InputPolicy input) {
+    public void performItemTransfer(Item item, Inventory dest, TransferScheme scheme) {
 
         if (isTargeted(dest)) {
             System.out.println("++++++++++++++");
             System.out.println("SOURCE ITEM ENTITY");
-            System.out.println("DEST " + dest.getType() + " has Retrieve." + receive + " and Input." + input);
+            System.out.println("DEST " + dest.getType() + " has Receive." + scheme.RECEIVE + " and Input." + scheme.INPUT);
         }
 
-        int leftover = performItemInput(dest, dest, item.getItemStack(), receive, input, LiquidsPolicy.NORMAL);
+        int leftover = performItemInput(dest, item.getItemStack(), scheme);
 
         if (isTargeted(dest)) {
             System.out.println("ITEM ENTITY HAS " + leftover + " REMAINING");
@@ -234,23 +250,20 @@ public class ItemTransferer implements Listener {
         }
     }
 
-    public int performItemInput(Inventory source, Inventory dest, ItemStack transfer,
-            ReceivePolicy receive, InputPolicy input, LiquidsPolicy liquids) {
+    public int performItemInput(Inventory dest, ItemStack transfer, TransferScheme scheme) {
 
         int leftovers = transfer.getAmount();
-
-        int size = dest.getSize();
         Iterator<Integer> slots;
 
         // try to transfer liquids if applicable...
-        if (liquids.isFlowing(transfer)) {
+        if (scheme.LIQUIDS.isDrainable(transfer)) {
 
-            slots = receive.getIterator(size);
+            slots = scheme.RECEIVE.getIterator(dest.getHolder());
             while (slots.hasNext() && leftovers > 0) {
                 int slot = slots.next();
 
                 ItemStack current = dest.getItem(slot);
-                if (current != null && current.getType() == Material.BUCKET && current.getAmount() == 1) {
+                if (scheme.LIQUIDS.isFillable(current)) {
                     dest.setItem(slot, transfer);
                     leftovers--;
                 }
@@ -258,9 +271,9 @@ public class ItemTransferer implements Listener {
         }
         else {
             // try to complete existing stacks in the inventory...
-            if (leftovers > 0 && input != InputPolicy.TO_EMPTY) {
+            if (leftovers > 0 && scheme.INPUT != InputPolicy.TO_EMPTY) {
 
-                slots = receive.getIterator(size);
+                slots = scheme.RECEIVE.getIterator(dest.getHolder());
                 while (slots.hasNext() && leftovers > 0) {
                     int slot = slots.next();
 
@@ -273,7 +286,7 @@ public class ItemTransferer implements Listener {
                         total -= overflow;
                         leftovers -= (total - current.getAmount());
 
-                        if (isTargeted(source, dest)) {
+                        if (isTargeted(dest)) {
                             System.out.println("FOUND SPACE FOR " + transfer + " AT DEST SLOT " + slot + " WITH " + current);
                         }
 
@@ -283,16 +296,16 @@ public class ItemTransferer implements Listener {
                 }
             }
             // otherwise try to begin a new stack in the inventory...
-            if (leftovers > 0 && input != InputPolicy.TO_NONEMPTY) {
+            if (leftovers > 0 && scheme.INPUT != InputPolicy.TO_NONEMPTY) {
 
-                slots = receive.getIterator(size);
+                slots = scheme.RECEIVE.getIterator(dest.getHolder());
                 while (slots.hasNext() && leftovers > 0) {
                     int slot = slots.next();
 
                     ItemStack current = dest.getItem(slot);
                     if (current == null) {
 
-                        if (isTargeted(source, dest)) {
+                        if (isTargeted(dest)) {
                             System.out.println("FOUND SPACE FOR " + transfer + " AT DEST SLOT " + slot);
                         }
 

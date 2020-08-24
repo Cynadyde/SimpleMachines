@@ -11,6 +11,7 @@ import org.bukkit.block.Container;
 import org.bukkit.entity.HumanEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.inventory.*;
@@ -28,12 +29,12 @@ public class ItemTransfererGui implements Listener {
     private final Map<Block, Window> guis;
 
     private final int slotR = 11;
-    private final int slotI = 12;
-    private final int slotS = 13;
+    private final int slotS = 12;
+    private final int slotI = 13;
     private final int slotO = 14;
     private final int slotL = 15;
 
-    private final List<Integer> guiSlots = Collections.unmodifiableList(Arrays.asList(slotR, slotI, slotS, slotO, slotL));
+    private final List<Integer> guiSlots = Collections.unmodifiableList(Arrays.asList(slotR, slotS, slotI, slotO, slotL));
 
     private final ItemStack gui0 = new ItemStack(Material.AIR, 0);
     private final ItemStack gui1 = Utils.createGuiItem(Material.BLACK_STAINED_GLASS_PANE, " ", "");
@@ -43,35 +44,37 @@ public class ItemTransfererGui implements Listener {
             Material.DARK_OAK_SIGN, "§2Receive Policy",
             "§ePlace one of the following trapdoors",
             "§e to change the order to accept items.",
-            "§fACACIA  §8->§b  Receive.REVERSE",
-            "§fWARPED  §8->§b  Receive.RANDOM"
-    );
-    private final ItemStack guiI = Utils.createGuiItem(
-            Material.OAK_SIGN, "§2Input Policy",
-            "§ePlace one of the following trapdoors",
-            "§e to change which slots can accept items.",
-            "§fSPRUCE  §8->§b  Input.TO_EMPTY",
-            "§fBIRCH   §8->§b  Input.TO_NONEMPTY"
+            "§fACACIA   §8->§b  Receive.REVERSE",
+            "§fWARPED   §8->§b  Receive.RANDOM",
+            "§fCRIMSON  §8->§b  Receive.ROUND_ROBIN"
     );
     private final ItemStack guiS = Utils.createGuiItem(
             Material.BIRCH_SIGN, "§2Serve Policy",
             "§ePlace one of the following trapdoors",
             "§e to change the order to give out items.",
-            "§fJUNGLE   §8->§b  Serve.REVERSE",
-            "§fCRIMSON  §8->§b  Serve.RANDOM"
+            "§fACACIA   §8->§b  Receive.REVERSE",
+            "§fWARPED   §8->§b  Receive.RANDOM",
+            "§fCRIMSON  §8->§b  Receive.ROUND_ROBIN"
+    );
+    private final ItemStack guiI = Utils.createGuiItem(
+            Material.SPRUCE_SIGN, "§2Input Policy",
+            "§ePlace one of the following trapdoors",
+            "§e to change which slots can accept items.",
+            "§fSPRUCE  §8->§b  Input.TO_EMPTY",
+            "§fBIRCH   §8->§b  Input.TO_NONEMPTY"
     );
     private final ItemStack guiO = Utils.createGuiItem(
-            Material.SPRUCE_SIGN, "§2Output Policy",
+            Material.OAK_SIGN, "§2Output Policy",
             "§ePlace one of the following trapdoors",
             "§e to change which slots can give items.",
             "§fOAK       §8->§b  Output.FROM_SOLO",
-            "§fDARK OAK  §8->§b  Output.FROM_NONSOLO"
+            "§fDARK_OAK  §8->§b  Output.FROM_NONSOLO"
     );
     private final ItemStack guiL = Utils.createGuiItem(
-            Material.JUNGLE_SIGN, "§2Liquids Policy",
+            Material.WARPED_SIGN, "§2Liquids Policy",
             "§ePlace one of the following trapdoors",
             "§e to change how buckets are transferred.",
-            "§fIRON  §8->§b  Liquids.FLOW"
+            "§fJUNGLE  §8->§b  Liquids.POUR_INTO"
     );
 
     public ItemTransfererGui(SimpleMachinesPlugin plugin) {
@@ -79,8 +82,9 @@ public class ItemTransfererGui implements Listener {
         this.guis = new HashMap<>();
     }
 
-    @EventHandler(ignoreCancelled = true)
+    @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onPlayerInteract(PlayerInteractEvent event) {
+        // anti grief plugins should have been able to cancel the event before now
         if (event.getClickedBlock() != null
                 && event.getAction() == Action.RIGHT_CLICK_BLOCK
                 && event.getMaterial() == Material.REDSTONE_TORCH
@@ -131,7 +135,7 @@ public class ItemTransfererGui implements Listener {
                     for (int s : guiSlots) {
                         if (isGuiSlotTokenValid(s, token)) {
                             if (Utils.isEmpty(gui.getTopInventory().getItem(s)))
-                            slot = s;
+                                slot = s;
                             break;
                         }
                     }
@@ -185,9 +189,9 @@ public class ItemTransfererGui implements Listener {
 
     private boolean isGuiSlotTokenValid(int slot, Material token) {
         switch (slot) {
-            case slotR: return token == null || ReceivePolicy.fromToken(token) != null;
+            case slotR:
+            case slotS: return token == null || SelectionPolicy.fromToken(token) != null;
             case slotI: return token == null || InputPolicy.fromToken(token) != null;
-            case slotS: return token == null || ServePolicy.fromToken(token) != null;
             case slotO: return token == null || OutputPolicy.fromToken(token) != null;
             case slotL: return token == null || LiquidsPolicy.fromToken(token) != null;
         }
@@ -209,14 +213,14 @@ public class ItemTransfererGui implements Listener {
             this.view = Bukkit.createInventory(viewer, 2 * 9, getTitle());
 
             view.setContents(new ItemStack[] {
-                    gui1, gui1, guiR, guiI, guiS, guiO, guiL, gui1, gui1,
+                    gui1, gui1, guiR, guiS, guiI, guiO, guiL, gui1, gui1,
                     gui2, gui2, gui0, gui0, gui0, gui0, gui0, gui2, gui2
             });
             loadData();
         }
 
         public void loadData() {
-            TransferScheme scheme = TransferScheme.ofContainer(container);
+            TransferScheme scheme = TransferScheme.ofHolder(container);
 
             view.setItem(slotR, new ItemStack(scheme.RECEIVE.getToken()));
             view.setItem(slotI, new ItemStack(scheme.INPUT.getToken()));
@@ -226,13 +230,13 @@ public class ItemTransfererGui implements Listener {
         }
 
         public void saveData() {
-            ReceivePolicy retrieve = Objects.requireNonNull(ReceivePolicy.fromToken(Utils.getMaterial(view.getItem(slotR))));
+            SelectionPolicy retrieve = Objects.requireNonNull(SelectionPolicy.fromToken(Utils.getMaterial(view.getItem(slotR))));
+            SelectionPolicy serve = Objects.requireNonNull(SelectionPolicy.fromToken(Utils.getMaterial(view.getItem(slotS))));
             InputPolicy input = Objects.requireNonNull(InputPolicy.fromToken(Utils.getMaterial(view.getItem(slotI))));
-            ServePolicy serve = Objects.requireNonNull(ServePolicy.fromToken(Utils.getMaterial(view.getItem(slotS))));
             OutputPolicy output = Objects.requireNonNull(OutputPolicy.fromToken(Utils.getMaterial(view.getItem(slotO))));
             LiquidsPolicy liquids = Objects.requireNonNull(LiquidsPolicy.fromToken(Utils.getMaterial(view.getItem(slotL))));
 
-            TransferScheme scheme = new TransferScheme(retrieve, input, serve, output, liquids);
+            TransferScheme scheme = new TransferScheme(retrieve, serve, input, output, liquids);
             scheme.applyTo(container);
         }
 
