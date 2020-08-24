@@ -19,5 +19,6 @@
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="library" name="Jetbrains Annotations" level="application" />
     <orderEntry type="library" name="spigot-1.16.2" level="application" />
+    <orderEntry type="library" name="ProtocolLib" level="application" />
   </component>
 </module>

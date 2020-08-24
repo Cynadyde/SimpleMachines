@@ -132,7 +132,7 @@ public class BlockBreaker implements Listener {
         }
     }
 
-    private boolean isBreakable(Block block) {
+    public boolean isBreakable(Block block) {
         return !block.getType().isAir() && !block.isLiquid() && block.getType().getHardness() >= 0;
     }
 }
