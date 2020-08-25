@@ -238,6 +238,7 @@ public class ItemTransfererGui implements Listener {
 
             TransferScheme scheme = new TransferScheme(retrieve, serve, input, output, liquids);
             scheme.applyTo(container);
+            container.update(false, false);
         }
 
         public Container getContainer() {
