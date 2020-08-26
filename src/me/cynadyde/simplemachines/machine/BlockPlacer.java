@@ -134,6 +134,7 @@ public class BlockPlacer implements Listener {
 
                         event.getNewState().update(true, true);
 
+                        // FIXME when glass is placed it sounds like it was broken; create new reflective util instead!
                         dest.getWorld().playEffect(dest.getLocation().add(0.5, 0.5, 0.5), Effect.STEP_SOUND, dest.getType());
 
                         ItemStack altered = item.clone();

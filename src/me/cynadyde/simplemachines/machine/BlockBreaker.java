@@ -88,21 +88,14 @@ public class BlockBreaker implements Listener {
         final BlockState initTarget = target.getState();
         final ItemStack tool = Objects.requireNonNull(initMachine.getInventory().getItem(slot));
         final int cost = 2; // durability cost for tool
-        final boolean animate = true; // send block cracks to nearby players
+        final boolean animate = true; // send block cracks and sounds to nearby players
 
         /* create a task that will continue mining the block each tick until
             either it is broken or the tool, machine, or block is disrupted. */
         jobs.put(target, new BukkitRunnable() {
 
-            /* TODO should find out more about the block break animation packet.
-                do I have to reset it for all players who've been sent one?
-                what if they go to another world and I don't reset it for them?
-                will they see those cracks at the same pos in any world forever? */
-
             private final int id = Utils.RNG.nextInt(); // block break animation id for players' clients
-            private final int viewDist = 32; // view distance for block break animations
             private final Set<Player> receivers = new HashSet<>(); // players who've been sent the animation
-            private final int stages = 10; // number of block break animation stages
             private int stage = 0; // current block break animation stage
 
             private final int duration = getDestroyTime(target, tool); // ticks until block is mined
@@ -130,19 +123,19 @@ public class BlockBreaker implements Listener {
                 }
                 if (animate) {
                     int prevStage = stage;
-                    stage = (int) Math.floor(stages * (ticks / (double) duration));
+                    stage = (int) Math.floor(10 * (ticks / (double) duration));
                     if (stage != prevStage) {
                         Vector origin = target.getLocation().add(0.5, 0.5, 0.5).toVector();
                         for (Player player : target.getWorld().getPlayers()) {
-                            if (player.getLocation().toVector().isInSphere(origin, viewDist)) {
+                            if (player.getLocation().toVector().isInSphere(origin, 32)) {
                                 ReflectiveUtils.updateBlockBreakAnimation(id, target, stage, player);
                                 receivers.add(player);
                             }
                         }
                     }
-                }
-                if ((ticks & 3) == 0) { // every 4 ticks (5x per second)
-                    ReflectiveUtils.makeBlockHitSound(target);
+                    if ((ticks & 3) == 0) { // every 4 ticks (5x per second)
+                        ReflectiveUtils.makeBlockHitSound(target);
+                    }
                 }
             }
 
@@ -153,8 +146,6 @@ public class BlockBreaker implements Listener {
                         if (player.isOnline()) {
                             ReflectiveUtils.updateBlockBreakAnimation(id, target, -1, player);
                         }
-//                        if (player.getWorld().equals(target.getWorld())) {
-//                        }
                     }
                     receivers.clear();
                 }
@@ -179,7 +170,6 @@ public class BlockBreaker implements Listener {
             }
 
             private void complete() {
-                System.out.println("COMPLETING mining job with anim id " + id + "!");
                 // complete() is only called after check() - machine assumed to be a dropper
                 Dropper dropper = (Dropper) machine.getState();
                 ItemMeta meta = Objects.requireNonNull(tool.getItemMeta()); // tool item meta is Damageable
@@ -236,21 +226,26 @@ public class BlockBreaker implements Listener {
 
     public Integer getRandomToolSlot(Inventory inv, Block toolTarget) {
         ItemStack[] contents = inv.getContents();
+        Integer fallback = null;
         Iterator<Integer> iterator = new RandomPermuteIterator(0, contents.length);
         while (iterator.hasNext()) {
             int i = iterator.next();
             ItemStack item = contents[i];
-            if (item != null && isAppropriateTool(item, toolTarget)) {
-                return i;
+            if (isTool(item)) {
+                fallback = i;
+                if (isHarvestedBy(toolTarget, item)) {
+                    return i;
+                }
             }
         }
-        return null;
+        return fallback;
     }
 
-    public boolean isAppropriateTool(ItemStack tool, Block block) {
-        if (!Utils.TOOLS.contains(tool.getType())) {
-            return false;
-        }
+    public boolean isTool(ItemStack tool) {
+        return tool != null && Utils.TOOLS.contains(tool.getType());
+    }
+
+    public boolean isHarvestedBy(Block block, ItemStack tool) {
         if (ReflectiveUtils.isSpecialToolRequired(block)) {
             return ReflectiveUtils.canBreakSpecialBlock(block, tool);
         }
@@ -261,31 +256,25 @@ public class BlockBreaker implements Listener {
         if (!isBreakable(block)) {
             throw new IllegalArgumentException("block is not breakable");
         }
-        double seconds;
         System.out.println("-----------");
-        if (isAppropriateTool(tool, block)) {
-            double speed = ReflectiveUtils.getDestroySpeed(block, tool);
-            System.out.println("destroy speed of " + tool.getType() + " against " + block.getType() + " is " + speed);
-            if (speed > 1) {
-                ItemMeta meta = tool.getItemMeta();
-                if (meta != null) {
-                    int efficiency = meta.getEnchantLevel(Enchantment.DIG_SPEED);
-                    if (efficiency > 0) {
-                        System.out.println("adding efficiency lvl " + efficiency + " boost of " + Math.pow(efficiency, 2) + 1);
-                        speed += Math.pow(efficiency, 2) + 1;
-                    }
+        double seconds = block.getType().getHardness() * (isHarvestedBy(block, tool) ? 1.5 : 5.0);
+        System.out.println(tool.getType() + " is" + (isHarvestedBy(block, tool) ? " " : " NOT ") + "an appropriate tool for " + block.getType());
+        double speed = ReflectiveUtils.getDestroySpeed(block, tool);
+        System.out.println("destroy speed of " + tool.getType() + " against " + block.getType() + " is " + speed);
+        if (speed > 1) {
+            ItemMeta meta = tool.getItemMeta();
+            if (meta != null) {
+                int efficiency = meta.getEnchantLevel(Enchantment.DIG_SPEED);
+                if (efficiency > 0) {
+                    System.out.println("adding efficiency lvl " + efficiency + " boost of " + Math.pow(efficiency, 2) + 1);
+                    speed += Math.pow(efficiency, 2) + 1;
                 }
             }
-            seconds = block.getType().getHardness() * 1.5 / speed;
-        }
-        else {
-            System.out.println(tool.getType() + " is NOT an appropriate tool for " + block.getType());
-            seconds = block.getType().getHardness() * 5.0;
         }
         System.out.println("total seconds: " + seconds);
-        System.out.println("total ticks: " + (int) Math.ceil(seconds * 20));
+        System.out.println("total ticks: " + (int) Math.ceil(seconds / speed * 20));
         System.out.println("-----------");
-        return (int) Math.ceil(seconds * 20);
+        return (int) Math.ceil((seconds / speed) * 20);
     }
 
     public void cancelAllJobs() {
