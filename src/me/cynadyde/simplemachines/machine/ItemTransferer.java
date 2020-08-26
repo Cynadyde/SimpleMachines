@@ -1,7 +1,10 @@
 package me.cynadyde.simplemachines.machine;
 
 import me.cynadyde.simplemachines.SimpleMachinesPlugin;
-import me.cynadyde.simplemachines.transfer.*;
+import me.cynadyde.simplemachines.transfer.InputPolicy;
+import me.cynadyde.simplemachines.transfer.LiquidsPolicy;
+import me.cynadyde.simplemachines.transfer.TransferPolicy;
+import me.cynadyde.simplemachines.transfer.TransferScheme;
 import me.cynadyde.simplemachines.util.ItemUtils;
 import me.cynadyde.simplemachines.util.PluginKey;
 import me.cynadyde.simplemachines.util.ReflectiveUtils;
@@ -23,8 +26,6 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataContainer;
-import org.bukkit.persistence.PersistentDataHolder;
-import org.bukkit.persistence.PersistentDataType;
 import org.spigotmc.SpigotWorldConfig;
 
 import java.util.Iterator;
@@ -183,7 +184,8 @@ public class ItemTransferer implements Listener {
             System.out.println("DEST " + dest.getType() + " has Receive." + scheme.RECEIVE + " and Input." + scheme.INPUT);
         }
 
-        Iterator<Integer> slots = scheme.SERVE.getIterator(source.getHolder());
+        InventoryHolder holder = source.getHolder();
+        Iterator<Integer> slots = scheme.SERVE.getIterator(holder);
         while (slots.hasNext()) {
             int slot = slots.next();
 
@@ -211,12 +213,12 @@ public class ItemTransferer implements Listener {
                 }
                 source.setItem(slot, current);
 
-                if (source.getHolder() instanceof Hopper) {
+                if (holder instanceof Hopper) {
                     int cooldown = pushed
-                            ? getHopperTransferInterval(source.getHolder())
-                            : getHopperCheckInterval(source.getHolder());
+                            ? getHopperTransferInterval(holder)
+                            : getHopperCheckInterval(holder);
 
-                    ReflectiveUtils.setHopperCooldown((Hopper) source.getHolder(), cooldown);
+                    ReflectiveUtils.setHopperCooldown((Hopper) holder, cooldown);
                 }
                 if (leftover == 0) {
                     break;
@@ -312,9 +314,6 @@ public class ItemTransferer implements Listener {
                         dest.setItem(slot, current);
                     }
                 }
-                if (dest.getHolder() instanceof PersistentDataHolder) {
-                    System.out.println("after loop: " + ((PersistentDataHolder) dest.getHolder()).getPersistentDataContainer().get(PluginKey.LATEST_SLOT.get(), PersistentDataType.BYTE));
-                }
             }
             // otherwise try to begin a new stack in the inventory...
             if (leftovers > 0 && scheme.INPUT != InputPolicy.TO_NONEMPTY) {
@@ -336,9 +335,9 @@ public class ItemTransferer implements Listener {
                 }
             }
         }
-        if (scheme.RECEIVE == SelectionPolicy.ROUND_ROBIN && holder instanceof BlockState) {
-            ((BlockState) holder).update(false, false);
-        }
+//        if (scheme.RECEIVE == SelectionPolicy.ROUND_ROBIN && holder instanceof BlockState) {
+//            ((BlockState) holder).update(false, false);
+//        }
         return leftovers;
     }
 

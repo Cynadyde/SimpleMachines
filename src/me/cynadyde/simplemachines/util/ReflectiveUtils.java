@@ -13,6 +13,8 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.SkullMeta;
+import org.bukkit.persistence.PersistentDataContainer;
+import org.bukkit.persistence.PersistentDataHolder;
 import org.spigotmc.SpigotWorldConfig;
 
 import java.lang.reflect.Constructor;
@@ -82,6 +84,7 @@ public class ReflectiveUtils {
     private static Field obcCraftMetaSkullProfile;
     private static Field obcCraftSkullProfile;
     private static Field nmsEntityWorld;
+    private static Field nmsTileEntityPersistentDataContainer;
     private static Field nmsWorldSpigotConfig;
 
     private ReflectiveUtils() {}
@@ -165,7 +168,8 @@ public class ReflectiveUtils {
             obcCraftMetaSkullProfile = obcCraftMetaSkull.getDeclaredField("profile");
             obcCraftSkullProfile = obcCraftSkull.getDeclaredField("profile");
             nmsEntityWorld = nmsEntity.getDeclaredField("world");
-            nmsWorldSpigotConfig = nmsWorld.getField("spigotConfig");
+            nmsTileEntityPersistentDataContainer = nmsTileEntity.getDeclaredField("persistentDataContainer");
+            nmsWorldSpigotConfig = nmsWorld.getDeclaredField("spigotConfig");
 
             // make sure everything is accessible
             obcCraftBlockGetNMS.setAccessible(true);
@@ -197,6 +201,7 @@ public class ReflectiveUtils {
             nmsTileEntitySetPosition.setAccessible(true);
             nmsTileEntitySave.setAccessible(true);
             nmsTileEntityHopperSetCooldown.setAccessible(true);
+            nmsTileEntityPersistentDataContainer.setAccessible(true);
             nmsSoundEffectTypeGetStepSound.setAccessible(true);
             nmsWorldSpigotConfig.setAccessible(true);
         }
@@ -330,6 +335,21 @@ public class ReflectiveUtils {
         }
         catch (IllegalAccessException ex) {
             logReflectionError("CraftSkull#profile", ex);
+        }
+    }
+
+    public static PersistentDataContainer getPersistentDataContainer(PersistentDataHolder dataHolder) {
+        if (dataHolder instanceof TileState) {
+            try {
+                return (PersistentDataContainer) nmsTileEntityPersistentDataContainer.get(obcCraftBlockEntityStateGetTileEntity.invoke(dataHolder));
+            }
+            catch (IllegalAccessException | InvocationTargetException | ClassCastException | NullPointerException ex) {
+                logReflectionError("TileEntity#persistentDataContainer", ex);
+            }
+            throw new NullPointerException("could not get PersistentDataContainer from TileState: " + dataHolder);
+        }
+        else {
+            return dataHolder.getPersistentDataContainer();
         }
     }
 

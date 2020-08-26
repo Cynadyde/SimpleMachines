@@ -17,7 +17,7 @@ public class RoundRobinIterator implements Iterator<Integer> {
         int length = holder.getInventory().getSize();
         int start = 0;
         if (holder instanceof PersistentDataHolder) {
-            PersistentDataContainer pdc = ((PersistentDataHolder) holder).getPersistentDataContainer();
+            PersistentDataContainer pdc = ReflectiveUtils.getPersistentDataContainer((PersistentDataHolder) holder);
             Byte data = pdc.get(PluginKey.LATEST_SLOT.get(), PersistentDataType.BYTE);
             if (data != null) {
                 start = (int) data + 1;
@@ -36,7 +36,7 @@ public class RoundRobinIterator implements Iterator<Integer> {
     public Integer next() {
         Integer result = iter.next();
         if (holder instanceof PersistentDataHolder && result != null) {
-            PersistentDataContainer pdc = ((PersistentDataHolder) holder).getPersistentDataContainer();
+            PersistentDataContainer pdc = ReflectiveUtils.getPersistentDataContainer((PersistentDataHolder) holder);
             pdc.set(PluginKey.LATEST_SLOT.get(), PersistentDataType.BYTE, result.byteValue());
         }
         return result;
