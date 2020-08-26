@@ -2,15 +2,14 @@ package me.cynadyde.simplemachines.machine;
 
 import me.cynadyde.simplemachines.SimpleMachinesPlugin;
 import me.cynadyde.simplemachines.transfer.*;
+import me.cynadyde.simplemachines.util.ItemUtils;
 import me.cynadyde.simplemachines.util.PluginKey;
 import me.cynadyde.simplemachines.util.ReflectiveUtils;
-import me.cynadyde.simplemachines.util.ItemUtils;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.BlockState;
 import org.bukkit.block.Container;
 import org.bukkit.block.Hopper;
-import org.bukkit.block.TileState;
 import org.bukkit.entity.Item;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -270,13 +269,14 @@ public class ItemTransferer implements Listener {
 
     public int performItemInput(Inventory dest, ItemStack transfer, TransferScheme scheme) {
 
-         int leftovers = transfer.getAmount();
+        int leftovers = transfer.getAmount();
+        InventoryHolder holder = dest.getHolder();
         Iterator<Integer> slots;
 
         // try to transfer liquids if applicable...
         if (scheme.LIQUIDS.isDrainable(transfer)) {
 
-            slots = scheme.RECEIVE.getIterator(dest.getHolder());
+            slots = scheme.RECEIVE.getIterator(holder);
             while (slots.hasNext() && leftovers > 0) {
                 int slot = slots.next();
 
@@ -291,7 +291,7 @@ public class ItemTransferer implements Listener {
             // try to complete existing stacks in the inventory...
             if (leftovers > 0 && scheme.INPUT != InputPolicy.TO_EMPTY) {
 
-                slots = scheme.RECEIVE.getIterator(dest.getHolder());
+                slots = scheme.RECEIVE.getIterator(holder);
                 while (slots.hasNext() && leftovers > 0) {
                     int slot = slots.next();
 
@@ -312,11 +312,14 @@ public class ItemTransferer implements Listener {
                         dest.setItem(slot, current);
                     }
                 }
+                if (dest.getHolder() instanceof PersistentDataHolder) {
+                    System.out.println("after loop: " + ((PersistentDataHolder) dest.getHolder()).getPersistentDataContainer().get(PluginKey.LATEST_SLOT.get(), PersistentDataType.BYTE));
+                }
             }
             // otherwise try to begin a new stack in the inventory...
             if (leftovers > 0 && scheme.INPUT != InputPolicy.TO_NONEMPTY) {
 
-                slots = scheme.RECEIVE.getIterator(dest.getHolder());
+                slots = scheme.RECEIVE.getIterator(holder);
                 while (slots.hasNext() && leftovers > 0) {
                     int slot = slots.next();
 
@@ -333,15 +336,9 @@ public class ItemTransferer implements Listener {
                 }
             }
         }
-
-//        // update the persistent data container for round robin mode to remember its last slot!
-//        if (scheme.RECEIVE == SelectionPolicy.ROUND_ROBIN) {
-//            System.out.println("dest.getHolder() == " + dest.getHolder());
-//            if (dest.getHolder() instanceof TileState) {
-//                System.out.println("last slot: " + ((PersistentDataHolder) dest.getHolder()).getPersistentDataContainer().get(PluginKey.LATEST_SLOT.get(), PersistentDataType.BYTE));
-//                ((TileState) dest.getHolder()).update(false, false);
-//            }
-//        }
+        if (scheme.RECEIVE == SelectionPolicy.ROUND_ROBIN && holder instanceof BlockState) {
+            ((BlockState) holder).update(false, false);
+        }
         return leftovers;
     }
 

@@ -3,13 +3,11 @@ package me.cynadyde.simplemachines.transfer;
 import me.cynadyde.simplemachines.util.PluginKey;
 import me.cynadyde.simplemachines.util.RandomPermuteIterator;
 import me.cynadyde.simplemachines.util.RoundRobinIterator;
-import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataHolder;
 import org.bukkit.persistence.PersistentDataType;
-import org.bukkit.plugin.Plugin;
 
 import java.util.Iterator;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -59,8 +57,7 @@ public enum SelectionPolicy implements TransferPolicy {
     ROUND_ROBIN {
         @Override
         public Iterator<Integer> getIterator(InventoryHolder holder) {
-            Plugin plugin = Bukkit.getPluginManager().getPlugin("SimpleMachines");
-            return new RoundRobinIterator(plugin, holder);
+            return new RoundRobinIterator(holder);
         }
 
         @Override
