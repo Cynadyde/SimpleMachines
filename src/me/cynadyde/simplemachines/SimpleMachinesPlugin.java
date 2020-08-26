@@ -40,6 +40,7 @@ public class SimpleMachinesPlugin extends JavaPlugin implements Listener {
     @Override
     public void onDisable() {
         itemTransfererGuiModule.closeAllGuis();
+        blockBreakerModule.cancelAllJobs();
     }
 
     @Override

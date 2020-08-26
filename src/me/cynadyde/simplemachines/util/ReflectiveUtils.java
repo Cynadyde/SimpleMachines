@@ -1,10 +1,16 @@
 package me.cynadyde.simplemachines.util;
 
-import net.minecraft.server.v1_16_R2.BlockPosition;
-import net.minecraft.server.v1_16_R2.PacketPlayOutBlockBreakAnimation;
+import net.minecraft.server.v1_16_R2.*;
 import org.bukkit.Bukkit;
+import org.bukkit.Material;
+import org.bukkit.Sound;
 import org.bukkit.block.*;
+import org.bukkit.block.Block;
+import org.bukkit.block.Container;
+import org.bukkit.block.data.BlockData;
+import org.bukkit.craftbukkit.v1_16_R2.CraftWorld;
 import org.bukkit.craftbukkit.v1_16_R2.block.CraftBlock;
+import org.bukkit.craftbukkit.v1_16_R2.block.data.CraftBlockData;
 import org.bukkit.craftbukkit.v1_16_R2.entity.CraftPlayer;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
@@ -33,18 +39,20 @@ public class ReflectiveUtils {
     private static Class<?> obcCraftSkull;
     private static Class<?> obcCraftWorld;
     private static Class<?> nmsBlock;
+    private static Class<?> nmsBlockData;
+    private static Class<?> nmsBlockPosition;
     private static Class<?> nmsEntity;
     private static Class<?> nmsIBlockData;
     private static Class<?> nmsIWorldReader;
-    private static Class<?> nmsBlockData;
     private static Class<?> nmsItem;
     private static Class<?> nmsItemBlock;
     private static Class<?> nmsItemStack;
     private static Class<?> nmsNbtCompound;
+    private static Class<?> nmsSoundEffect;
+    private static Class<?> nmsSoundEffectType;
     private static Class<?> nmsTileEntity;
     private static Class<?> nmsTileEntityHopper;
     private static Class<?> nmsWorld;
-    private static Class<?> nmsBlockPosition;
 
     private static Constructor<?> nmsNbtCompoundConstructor;
 
@@ -58,6 +66,9 @@ public class ReflectiveUtils {
     private static Method obcCraftWorldGetHandle;
     private static Method nmsBlockGetBlockData;
     private static Method nmsBlockDataCanPlace;
+    private static Method nmsBlockDataGetStepSound;
+    private static Method nmsBlockDataIsRequiresSpecialTool;
+    private static Method nmsItemCanDestroySpecialBlock;
     private static Method nmsItemGetDestroySpeed;
     private static Method nmsItemGetCraftingRemainingItem;
     private static Method nmsItemBlockGetBlock;
@@ -69,6 +80,7 @@ public class ReflectiveUtils {
     private static Method nmsTileEntitySetLocation;
     private static Method nmsTileEntitySetPosition;
     private static Method nmsTileEntitySave;
+    private static Method nmsSoundEffectTypeGetStepSound;
 
     private static Field obcCraftEntityEntity;
     private static Field obcCraftItemStackHandle;
@@ -107,14 +119,16 @@ public class ReflectiveUtils {
             obcCraftSkull = Class.forName("org.bukkit.craftbukkit.v1_16_R2.block.CraftSkull");
             obcCraftWorld = Class.forName("org.bukkit.craftbukkit." + version + ".CraftWorld");
             nmsBlock = Class.forName("net.minecraft.server." + version + ".Block");
+            nmsBlockData = Class.forName("net.minecraft.server." + version + ".BlockBase$BlockData");
             nmsEntity = Class.forName("net.minecraft.server." + version + ".Entity");
             nmsIBlockData = Class.forName("net.minecraft.server." + version + ".IBlockData");
             nmsIWorldReader = Class.forName("net.minecraft.server.v1_16_R2.IWorldReader");
-            nmsBlockData = Class.forName("net.minecraft.server." + version + ".BlockBase$BlockData");
             nmsItem = Class.forName("net.minecraft.server." + version + ".Item");
             nmsItemBlock = Class.forName("net.minecraft.server.v1_16_R2.ItemBlock");
             nmsItemStack = Class.forName("net.minecraft.server." + version + ".ItemStack");
             nmsNbtCompound = Class.forName("net.minecraft.server." + version + ".NBTTagCompound");
+            nmsSoundEffect = Class.forName("net.minecraft.server.v1_16_R2.SoundEffect");
+            nmsSoundEffectType = Class.forName("net.minecraft.server.v1_16_R2.SoundEffectType");
             nmsTileEntity = Class.forName("net.minecraft.server." + version + ".TileEntity");
             nmsTileEntityHopper = Class.forName("net.minecraft.server." + version + ".TileEntityHopper");
             nmsWorld = Class.forName("net.minecraft.server." + version + ".World");
@@ -134,6 +148,9 @@ public class ReflectiveUtils {
             obcCraftWorldGetHandle = obcCraftWorld.getDeclaredMethod("getHandle");
             nmsBlockGetBlockData = nmsBlock.getDeclaredMethod("getBlockData");
             nmsBlockDataCanPlace = nmsBlockData.getDeclaredMethod("canPlace", nmsIWorldReader, nmsBlockPosition);
+            nmsBlockDataGetStepSound = nmsBlockData.getDeclaredMethod("getStepSound");
+            nmsBlockDataIsRequiresSpecialTool = nmsBlockData.getDeclaredMethod("isRequiresSpecialTool");
+            nmsItemCanDestroySpecialBlock = nmsItem.getDeclaredMethod("canDestroySpecialBlock", nmsIBlockData);
             nmsItemGetDestroySpeed = nmsItem.getDeclaredMethod("getDestroySpeed", nmsItemStack, nmsIBlockData);
             nmsItemGetCraftingRemainingItem = nmsItem.getDeclaredMethod("getCraftingRemainingItem");
             nmsItemBlockGetBlock = nmsItemBlock.getDeclaredMethod("getBlock");
@@ -145,6 +162,7 @@ public class ReflectiveUtils {
             nmsTileEntitySetLocation = nmsTileEntity.getDeclaredMethod("setLocation", nmsWorld, nmsBlockPosition);
             nmsTileEntitySetPosition = nmsTileEntity.getDeclaredMethod("setPosition", nmsBlockPosition);
             nmsTileEntitySave = nmsTileEntity.getDeclaredMethod("save", nmsNbtCompound);
+            nmsSoundEffectTypeGetStepSound = nmsSoundEffectType.getDeclaredMethod("d");
 
             // get the needed fields
             obcCraftEntityEntity = obcCraftEntity.getDeclaredField("entity");
@@ -169,6 +187,9 @@ public class ReflectiveUtils {
             obcCraftWorldGetHandle.setAccessible(true);
             nmsBlockGetBlockData.setAccessible(true);
             nmsBlockDataCanPlace.setAccessible(true);
+            nmsBlockDataGetStepSound.setAccessible(true);
+            nmsBlockDataIsRequiresSpecialTool.setAccessible(true);
+            nmsItemCanDestroySpecialBlock.setAccessible(true);
             nmsItemGetDestroySpeed.setAccessible(true);
             nmsItemGetCraftingRemainingItem.setAccessible(true);
             nmsItemBlockGetBlock.setAccessible(true);
@@ -181,6 +202,7 @@ public class ReflectiveUtils {
             nmsTileEntitySetPosition.setAccessible(true);
             nmsTileEntitySave.setAccessible(true);
             nmsTileEntityHopperSetCooldown.setAccessible(true);
+            nmsSoundEffectTypeGetStepSound.setAccessible(true);
             nmsWorldSpigotConfig.setAccessible(true);
         }
         catch (ClassNotFoundException | NoSuchMethodException | NoSuchFieldException ex) {
@@ -203,19 +225,55 @@ public class ReflectiveUtils {
         return null;
     }
 
-    public static boolean isPreferredTool(Block block, ItemStack tool) {
+    public static boolean isSpecialToolRequired(Block block) {
+        try {
+            return (boolean) nmsBlockDataIsRequiresSpecialTool.invoke(obcCraftBlockGetNMS.invoke(block));
+        }
+        catch (IllegalAccessException | InvocationTargetException | ClassCastException | NullPointerException ex) {
+            logReflectionError("BlockData#isRequiresSpecialTool()", ex);
+        }
+        return true;
+    }
+
+    public static boolean canBreakSpecialBlock(Block block, ItemStack item) {
+        try {
+            Object nmsItemStackObj = obcCraftItemStackHandle.get(item);
+            Object nmsItemObj = nmsItemStackGetItem.invoke(nmsItemStackObj);
+            Object nmsIBlockDataObj = obcCraftBlockGetNMS.invoke(block);
+
+            return (boolean) nmsItemCanDestroySpecialBlock.invoke(nmsItemObj, nmsIBlockDataObj);
+        }
+        catch (IllegalAccessException | InvocationTargetException | ClassCastException | NullPointerException ex) {
+            logReflectionError("Item#canBreakSpecialBlock()", ex);
+        }
+        return false;
+    }
+
+    public static float getDestroySpeed(Block block, ItemStack tool) {
         try {
             if (obcCraftItemStack.isInstance(tool) && obcCraftBlock.isInstance(block)) {
                 Object itemStack = obcCraftItemStackHandle.get(tool);
                 Object item = nmsItemStackGetItem.invoke(itemStack);
                 Object blockData = obcCraftBlockGetNMS.invoke(block);
-                return (float) nmsItemGetDestroySpeed.invoke(item, itemStack, blockData) > 1.0F;
+                return (float) nmsItemGetDestroySpeed.invoke(item, itemStack, blockData);
             }
         }
         catch (IllegalAccessException | InvocationTargetException | ClassCastException | NullPointerException ex) {
             logReflectionError("Item#getDestroySpeed()", ex);
         }
-        return false;
+        return 1.0F;
+    }
+
+    public static void updateBlockBreakAnimation(int id, Block block, int stage, Player player) {
+        BlockPosition pos = ((CraftBlock) block).getPosition();
+        PacketPlayOutBlockBreakAnimation packet = new PacketPlayOutBlockBreakAnimation(id, pos, stage);
+        ((CraftPlayer) player).getHandle().playerConnection.sendPacket(packet);
+    }
+
+    public static void makeBlockHitSound(Block block) {
+        SoundEffect s = ((CraftBlock) block).getNMS().getStepSound().d();
+        ((CraftWorld) block.getWorld()).getHandle().playSound((EntityHuman) null, ((CraftBlock) block).getPosition(), s, SoundCategory.BLOCKS, 0.6F, 0.65F);
+
     }
 
     public static boolean canPlaceOn(ItemStack item, Block block) {
@@ -304,11 +362,5 @@ public class ReflectiveUtils {
         catch (IllegalAccessException | InvocationTargetException | ClassCastException | NullPointerException ex) {
             logReflectionError("TileEntityHopper#cooldown", ex);
         }
-    }
-
-    public static void updateBlockBreakAnimation(int id, Block block, int stage, Player player) {
-        BlockPosition pos = ((CraftBlock) block).getPosition();
-        PacketPlayOutBlockBreakAnimation packet = new PacketPlayOutBlockBreakAnimation(id, pos, stage);
-        ((CraftPlayer) player).getHandle().playerConnection.sendPacket(packet);
     }
 }
