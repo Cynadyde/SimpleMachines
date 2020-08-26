@@ -3,7 +3,7 @@ package me.cynadyde.simplemachines.machine;
 import me.cynadyde.simplemachines.SimpleMachinesPlugin;
 import me.cynadyde.simplemachines.util.RandomPermuteIterator;
 import me.cynadyde.simplemachines.util.ReflectiveUtils;
-import me.cynadyde.simplemachines.util.Utils;
+import me.cynadyde.simplemachines.util.ItemUtils;
 import org.bukkit.Effect;
 import org.bukkit.Material;
 import org.bukkit.Sound;
@@ -87,27 +87,19 @@ public class BlockBreaker implements Listener {
 
         final BlockState initTarget = target.getState();
         final ItemStack tool = Objects.requireNonNull(initMachine.getInventory().getItem(slot));
-        final int cost = 2; // durability cost for tool
-        final boolean animate = true; // send block cracks and sounds to nearby players
+        final int cost = 4; // durability cost for tool
 
         /* create a task that will continue mining the block each tick until
             either it is broken or the tool, machine, or block is disrupted. */
         jobs.put(target, new BukkitRunnable() {
 
-            private final int id = Utils.RNG.nextInt(); // block break animation id for players' clients
+            private final boolean animate = true; // send block cracks and sounds to nearby players
+            private final int id = ItemUtils.RNG.nextInt(); // block break animation id for players' clients
             private final Set<Player> receivers = new HashSet<>(); // players who've been sent the animation
             private int stage = 0; // current block break animation stage
 
-            private final int duration = getDestroyTime(target, tool); // ticks until block is mined
+            private final int duration = getDestroyTime(target, tool); // total ticks needed to destroy block
             private int ticks = 0; // ticks elapsed
-
-            {
-                System.out.println("Mining Job created!");
-                System.out.println("id = " + id);
-                System.out.println("target = " + target);
-                System.out.println("tool = " + tool);
-                System.out.println("duration = " + duration);
-            }
 
             @Override
             public void run() {
@@ -134,7 +126,7 @@ public class BlockBreaker implements Listener {
                         }
                     }
                     if ((ticks & 3) == 0) { // every 4 ticks (5x per second)
-                        ReflectiveUtils.makeBlockHitSound(target);
+                        ReflectiveUtils.playBlockHitSound(target);
                     }
                 }
             }
@@ -152,6 +144,9 @@ public class BlockBreaker implements Listener {
                 jobs.remove(target);
                 super.cancel();
             }
+
+            // TODO could put check() and complete() in their own BlockBreaker methods
+            //  just to try and minimize this anonymous class
 
             private boolean check() {
                 // if the machine was destroyed, this job is invalidated!
@@ -189,7 +184,7 @@ public class BlockBreaker implements Listener {
                         double chance = 1.0 / (meta.getEnchantLevel(Enchantment.DURABILITY) + 1);
                         if (chance < 1.0) {
                             for (int i = 0; i < newDamage; i++) {
-                                if (Utils.RNG.nextDouble() >= chance) {
+                                if (ItemUtils.RNG.nextDouble() >= chance) {
                                     newDamage -= 1;
                                 }
                             }
@@ -209,7 +204,7 @@ public class BlockBreaker implements Listener {
                         }
                     }
                     for (ItemStack drop : target.getDrops(tool)) {
-                        Utils.dropFromDropper(dropper, drop);
+                        ItemUtils.dropFromDropper(dropper, drop);
                     }
 
                     target.getWorld().playEffect(target.getLocation().add(0.5, 0.5, 0.5), Effect.STEP_SOUND, target.getType());
@@ -242,7 +237,7 @@ public class BlockBreaker implements Listener {
     }
 
     public boolean isTool(ItemStack tool) {
-        return tool != null && Utils.TOOLS.contains(tool.getType());
+        return tool != null && ItemUtils.TOOLS.contains(tool.getType());
     }
 
     public boolean isHarvestedBy(Block block, ItemStack tool) {
@@ -256,24 +251,17 @@ public class BlockBreaker implements Listener {
         if (!isBreakable(block)) {
             throw new IllegalArgumentException("block is not breakable");
         }
-        System.out.println("-----------");
         double seconds = block.getType().getHardness() * (isHarvestedBy(block, tool) ? 1.5 : 5.0);
-        System.out.println(tool.getType() + " is" + (isHarvestedBy(block, tool) ? " " : " NOT ") + "an appropriate tool for " + block.getType());
         double speed = ReflectiveUtils.getDestroySpeed(block, tool);
-        System.out.println("destroy speed of " + tool.getType() + " against " + block.getType() + " is " + speed);
         if (speed > 1) {
             ItemMeta meta = tool.getItemMeta();
             if (meta != null) {
                 int efficiency = meta.getEnchantLevel(Enchantment.DIG_SPEED);
                 if (efficiency > 0) {
-                    System.out.println("adding efficiency lvl " + efficiency + " boost of " + Math.pow(efficiency, 2) + 1);
                     speed += Math.pow(efficiency, 2) + 1;
                 }
             }
         }
-        System.out.println("total seconds: " + seconds);
-        System.out.println("total ticks: " + (int) Math.ceil(seconds / speed * 20));
-        System.out.println("-----------");
         return (int) Math.ceil((seconds / speed) * 20);
     }
 

@@ -2,6 +2,7 @@ package me.cynadyde.simplemachines.transfer;
 
 import me.cynadyde.simplemachines.util.PluginKey;
 import me.cynadyde.simplemachines.util.RandomPermuteIterator;
+import me.cynadyde.simplemachines.util.RoundRobinIterator;
 import org.bukkit.Material;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.persistence.PersistentDataContainer;
@@ -9,6 +10,7 @@ import org.bukkit.persistence.PersistentDataHolder;
 import org.bukkit.persistence.PersistentDataType;
 
 import java.util.Iterator;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
 /**
@@ -31,8 +33,8 @@ public enum SelectionPolicy implements TransferPolicy {
         @Override
         public Iterator<Integer> getIterator(InventoryHolder holder) {
             int length = holder.getInventory().getSize();
-            final int lastIndex = length - 1;
-            return IntStream.range(0, length).map(n -> lastIndex - n).iterator();
+            AtomicInteger counter = new AtomicInteger(length);
+            return IntStream.generate(counter::decrementAndGet).limit(length).iterator();
         }
 
         @Override
@@ -55,16 +57,7 @@ public enum SelectionPolicy implements TransferPolicy {
     ROUND_ROBIN {
         @Override
         public Iterator<Integer> getIterator(InventoryHolder holder) {
-            int length = holder.getInventory().getSize();
-            int start = 0;
-            if (holder instanceof PersistentDataHolder) {
-                PersistentDataContainer pdc = ((PersistentDataHolder) holder).getPersistentDataContainer();
-                Byte data = pdc.get(PluginKey.LATEST_SLOT.get(), PersistentDataType.BYTE);
-                if (data != null) {
-                    start = (int) data;
-                }
-            }
-            return IntStream.concat(IntStream.range(start, length), IntStream.range(0, start)).iterator();
+            return new RoundRobinIterator(holder);
         }
 
         @Override

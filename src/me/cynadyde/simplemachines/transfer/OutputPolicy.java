@@ -1,6 +1,6 @@
 package me.cynadyde.simplemachines.transfer;
 
-import me.cynadyde.simplemachines.util.Utils;
+import me.cynadyde.simplemachines.util.ItemUtils;
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.Contract;
@@ -14,7 +14,7 @@ public enum OutputPolicy implements TransferPolicy {
     NORMAL {
         @Override
         public boolean testSlot(ItemStack slot) {
-            return !Utils.isEmpty(slot);
+            return !ItemUtils.isEmpty(slot);
         }
 
         @Override
@@ -27,7 +27,7 @@ public enum OutputPolicy implements TransferPolicy {
     FROM_SOLO {
         @Override
         public boolean testSlot(ItemStack slot) {
-            return !Utils.isEmpty(slot) && !Utils.isFull(slot) && slot.getAmount() == 1;
+            return !ItemUtils.isEmpty(slot) && !ItemUtils.isFull(slot) && slot.getAmount() == 1;
         }
 
         @Override
@@ -40,7 +40,7 @@ public enum OutputPolicy implements TransferPolicy {
     FROM_NONSOLO {
         @Override
         public boolean testSlot(ItemStack slot) {
-            return !Utils.isEmpty(slot) && (Utils.isFull(slot) || slot.getAmount() > 1);
+            return !ItemUtils.isEmpty(slot) && (ItemUtils.isFull(slot) || slot.getAmount() > 1);
         }
 
         @Override

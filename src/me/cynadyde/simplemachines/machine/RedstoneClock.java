@@ -20,4 +20,6 @@ public class RedstoneClock implements Listener {
     public RedstoneClock(SimpleMachinesPlugin plugin) {
         this.plugin = plugin;
     }
+
+    // TODO redstone clock!
 }

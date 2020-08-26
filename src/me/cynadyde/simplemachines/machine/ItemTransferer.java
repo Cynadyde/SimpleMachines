@@ -4,12 +4,13 @@ import me.cynadyde.simplemachines.SimpleMachinesPlugin;
 import me.cynadyde.simplemachines.transfer.*;
 import me.cynadyde.simplemachines.util.PluginKey;
 import me.cynadyde.simplemachines.util.ReflectiveUtils;
-import me.cynadyde.simplemachines.util.Utils;
+import me.cynadyde.simplemachines.util.ItemUtils;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.BlockState;
 import org.bukkit.block.Container;
 import org.bukkit.block.Hopper;
+import org.bukkit.block.TileState;
 import org.bukkit.entity.Item;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -23,6 +24,8 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataContainer;
+import org.bukkit.persistence.PersistentDataHolder;
+import org.bukkit.persistence.PersistentDataType;
 import org.spigotmc.SpigotWorldConfig;
 
 import java.util.Iterator;
@@ -30,6 +33,13 @@ import java.util.Iterator;
 public class ItemTransferer implements Listener {
 
     // TODO hoppers suck in liquids above it (policy permitting)
+    //  grab the top source block if there is a column above the hopper
+    //  milk any cows above the hopper lol
+    //  No. don't do ANYTHING with entities involving hoppers.
+    //  this is the laggiest function of hoppers already.
+    //  Just iterate through the server's loaded tile entities
+    //  and have them check the block above (maybe reflection would
+    //  reveal a flag on their object?
 
     private final SimpleMachinesPlugin plugin;
     private InventoryMoveItemEvent lastSpammedInvMoveItemEvent;
@@ -71,7 +81,7 @@ public class ItemTransferer implements Listener {
         // anti grief plugins should have been able to cancel the event by now
         if (event.getItem() != null) {
             ItemStack item = event.getItem();
-            if (item.getAmount() == 1 && Utils.FILLED_BUCKETS.contains(item.getType())) {
+            if (item.getAmount() == 1 && ItemUtils.FILLED_BUCKETS.contains(item.getType())) {
                 if (event.getClickedBlock() != null) {
                     BlockState state = event.getClickedBlock().getState();
                     if (state instanceof Container) {
@@ -219,6 +229,14 @@ public class ItemTransferer implements Listener {
                 }
             }
         }
+
+//        // update the persistent data container for round robin mode to remember its last slot!
+//        if (scheme.SERVE == SelectionPolicy.ROUND_ROBIN) {
+//            System.out.println("source.getHolder() == " + source.getHolder());
+//            if (source.getHolder() instanceof BlockState) {
+//                ((BlockState) source.getHolder()).update(false, false);
+//            }
+//        }
         if (isTargeted(source, dest)) {
             System.out.println("--------------");
         }
@@ -252,7 +270,7 @@ public class ItemTransferer implements Listener {
 
     public int performItemInput(Inventory dest, ItemStack transfer, TransferScheme scheme) {
 
-        int leftovers = transfer.getAmount();
+         int leftovers = transfer.getAmount();
         Iterator<Integer> slots;
 
         // try to transfer liquids if applicable...
@@ -315,6 +333,15 @@ public class ItemTransferer implements Listener {
                 }
             }
         }
+
+//        // update the persistent data container for round robin mode to remember its last slot!
+//        if (scheme.RECEIVE == SelectionPolicy.ROUND_ROBIN) {
+//            System.out.println("dest.getHolder() == " + dest.getHolder());
+//            if (dest.getHolder() instanceof TileState) {
+//                System.out.println("last slot: " + ((PersistentDataHolder) dest.getHolder()).getPersistentDataContainer().get(PluginKey.LATEST_SLOT.get(), PersistentDataType.BYTE));
+//                ((TileState) dest.getHolder()).update(false, false);
+//            }
+//        }
         return leftovers;
     }
 

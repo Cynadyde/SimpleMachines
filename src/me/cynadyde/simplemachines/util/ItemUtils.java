@@ -17,9 +17,9 @@ import org.jetbrains.annotations.Contract;
 
 import java.util.*;
 
-public class Utils {
+public class ItemUtils {
 
-    private Utils() {}
+    private ItemUtils() {}
 
     /**
      * The plugin's random number generator.

@@ -3,7 +3,6 @@ package me.cynadyde.simplemachines.machine;
 import me.cynadyde.simplemachines.SimpleMachinesPlugin;
 import me.cynadyde.simplemachines.util.RandomPermuteIterator;
 import me.cynadyde.simplemachines.util.ReflectiveUtils;
-import org.bukkit.Effect;
 import org.bukkit.Material;
 import org.bukkit.block.*;
 import org.bukkit.block.data.BlockData;
@@ -134,8 +133,7 @@ public class BlockPlacer implements Listener {
 
                         event.getNewState().update(true, true);
 
-                        // FIXME when glass is placed it sounds like it was broken; create new reflective util instead!
-                        dest.getWorld().playEffect(dest.getLocation().add(0.5, 0.5, 0.5), Effect.STEP_SOUND, dest.getType());
+                        ReflectiveUtils.playBlockPlaceSound(dest);
 
                         ItemStack altered = item.clone();
                         altered.setAmount(item.getAmount() - 1);

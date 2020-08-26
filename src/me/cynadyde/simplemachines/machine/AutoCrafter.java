@@ -4,7 +4,7 @@ import me.cynadyde.simplemachines.SimpleMachinesPlugin;
 import me.cynadyde.simplemachines.transfer.OutputPolicy;
 import me.cynadyde.simplemachines.transfer.TransferScheme;
 import me.cynadyde.simplemachines.util.ReflectiveUtils;
-import me.cynadyde.simplemachines.util.Utils;
+import me.cynadyde.simplemachines.util.ItemUtils;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
@@ -72,7 +72,7 @@ public class AutoCrafter implements Listener {
                 Recipe recipe = getBestRecipeMatch(ingredients);
                 if (recipe != null) {
                     ItemStack result = recipe.getResult();
-                    Utils.dropFromDropper(dropper, result);
+                    ItemUtils.dropFromDropper(dropper, result);
                     dropper.getInventory().setContents(calcLeftovers(contents, ingredients));
                 }
             }
@@ -125,7 +125,7 @@ public class AutoCrafter implements Listener {
                 ItemStack item = c.clone();
                 int taken = consumed[i] == null ? 0 : consumed[i].getAmount();
                 item.setAmount(item.getAmount() - taken);
-                if (Utils.isEmpty(item)) {
+                if (ItemUtils.isEmpty(item)) {
                     item = ReflectiveUtils.getCraftingRemainder(c);
                 }
                 results[i] = item;

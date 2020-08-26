@@ -2,15 +2,11 @@ package me.cynadyde.simplemachines.util;
 
 import net.minecraft.server.v1_16_R2.*;
 import org.bukkit.Bukkit;
-import org.bukkit.Material;
-import org.bukkit.Sound;
-import org.bukkit.block.*;
 import org.bukkit.block.Block;
 import org.bukkit.block.Container;
-import org.bukkit.block.data.BlockData;
+import org.bukkit.block.*;
 import org.bukkit.craftbukkit.v1_16_R2.CraftWorld;
 import org.bukkit.craftbukkit.v1_16_R2.block.CraftBlock;
-import org.bukkit.craftbukkit.v1_16_R2.block.data.CraftBlockData;
 import org.bukkit.craftbukkit.v1_16_R2.entity.CraftPlayer;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
@@ -23,7 +19,6 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.util.Objects;
 import java.util.logging.Logger;
 
 public class ReflectiveUtils {
@@ -216,7 +211,7 @@ public class ReflectiveUtils {
                 Object nmsItemObj = nmsItemStackGetItem.invoke(obcCraftItemStackHandle.get(item));
                 Object nmsItemObjResult = nmsItemGetCraftingRemainingItem.invoke(nmsItemObj);
                 ItemStack result = (ItemStack) obcCraftItemStackAsNewCraftStack.invoke(nmsItemObjResult);
-                return Utils.isEmpty(result) ? null : result;
+                return ItemUtils.isEmpty(result) ? null : result;
             }
         }
         catch (IllegalAccessException | InvocationTargetException | ClassCastException | NullPointerException ex) {
@@ -265,15 +260,22 @@ public class ReflectiveUtils {
     }
 
     public static void updateBlockBreakAnimation(int id, Block block, int stage, Player player) {
+        // TODO reflection
         BlockPosition pos = ((CraftBlock) block).getPosition();
         PacketPlayOutBlockBreakAnimation packet = new PacketPlayOutBlockBreakAnimation(id, pos, stage);
         ((CraftPlayer) player).getHandle().playerConnection.sendPacket(packet);
     }
 
-    public static void makeBlockHitSound(Block block) {
+    public static void playBlockPlaceSound(Block block) {
+        // TODO reflection
+        SoundEffect s = ((CraftBlock) block).getNMS().getStepSound().e();
+        ((CraftWorld) block.getWorld()).getHandle().playSound((EntityHuman) null, ((CraftBlock) block).getPosition(), s, SoundCategory.BLOCKS, 0.6F, 0.65F);
+    }
+
+    public static void playBlockHitSound(Block block) {
+        // TODO reflection
         SoundEffect s = ((CraftBlock) block).getNMS().getStepSound().d();
         ((CraftWorld) block.getWorld()).getHandle().playSound((EntityHuman) null, ((CraftBlock) block).getPosition(), s, SoundCategory.BLOCKS, 0.6F, 0.65F);
-
     }
 
     public static boolean canPlaceOn(ItemStack item, Block block) {
@@ -302,21 +304,12 @@ public class ReflectiveUtils {
             throw new IllegalArgumentException("source and dest must be non-null and have the same class.");
         }
         try {
-            System.out.println("dest: " + dest);
-            System.out.println("source: " + source);
-
             // modifies dest's tile entity snapshot so that its next update applies changes to the world
             if (obcCraftBlockEntityState.isInstance(dest) && obcCraftBlockEntityState.isInstance(source)) {
-
-                System.out.println("old dest nbt: " + nmsTileEntitySave.invoke(obcCraftBlockEntityStateGetSnapshot.invoke(dest), nmsNbtCompoundConstructor.newInstance()));
-                System.out.println("source nbt: " + nmsTileEntitySave.invoke(obcCraftBlockEntityStateGetSnapshot.invoke(source), nmsNbtCompoundConstructor.newInstance()));
-
                 obcCraftBlockEntityStateLoad.invoke(dest, obcCraftBlockEntityStateGetSnapshot.invoke(source));
-
-                System.out.println("new dest nbt: " + nmsTileEntitySave.invoke(obcCraftBlockEntityStateGetSnapshot.invoke(dest), nmsNbtCompoundConstructor.newInstance()));
             }
         }
-        catch (IllegalAccessException | InvocationTargetException | ClassCastException | NullPointerException | InstantiationException ex) {
+        catch (IllegalAccessException | InvocationTargetException | ClassCastException | NullPointerException ex) {
             logReflectionError("CraftBlockEntityState#load()", ex);
         }
     }

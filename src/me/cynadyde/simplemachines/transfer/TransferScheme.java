@@ -35,7 +35,7 @@ public class TransferScheme {
                 loadLiquidsPolicyFrom(i));
     }
 
-    private static <T extends TransferPolicy> T loadPolicy(InventoryHolder holder, PluginKey key, T[] values, T fallback) {
+    private static <T extends Enum<?> & TransferPolicy> T loadPolicy(InventoryHolder holder, PluginKey key, T[] values, T fallback) {
         if (holder instanceof PersistentDataHolder) {
             PersistentDataContainer pdc = ((PersistentDataHolder) holder).getPersistentDataContainer();
             Byte data = pdc.get(key.get(), PersistentDataType.BYTE);
@@ -46,10 +46,17 @@ public class TransferScheme {
         return fallback;
     }
 
-    private static void savePolicy(InventoryHolder holder, PluginKey key, byte value) {
+    private static <T extends Enum<?> & TransferPolicy> void savePolicy(InventoryHolder holder, PluginKey key, T value, T fallback) {
         if (holder instanceof PersistentDataHolder) {
             PersistentDataContainer pdc = ((PersistentDataHolder) holder).getPersistentDataContainer();
-            pdc.set(key.get(), PersistentDataType.BYTE, value);
+            byte data = (byte) value.ordinal();
+            byte zero = (byte) fallback.ordinal();
+            if (data != zero) {
+                pdc.set(key.get(), PersistentDataType.BYTE, data);
+            }
+            else {
+                pdc.remove(key.get());
+            }
         }
     }
 
@@ -74,23 +81,23 @@ public class TransferScheme {
     }
 
     public static void saveReceivePolicyTo(InventoryHolder holder, SelectionPolicy policy) {
-        savePolicy(holder, PluginKey.RECEIVE_POLICY, (byte) policy.ordinal());
+        savePolicy(holder, PluginKey.RECEIVE_POLICY, policy, SelectionPolicy.NORMAL);
     }
 
     public static void saveServePolicyTo(InventoryHolder holder, SelectionPolicy policy) {
-        savePolicy(holder, PluginKey.SERVE_POLICY, (byte) policy.ordinal());
+        savePolicy(holder, PluginKey.SERVE_POLICY, policy, SelectionPolicy.NORMAL);
     }
 
     public static void saveInputPolicyTo(InventoryHolder holder, InputPolicy policy) {
-        savePolicy(holder, PluginKey.INPUT_POLICY, (byte) policy.ordinal());
+        savePolicy(holder, PluginKey.INPUT_POLICY, policy, InputPolicy.NORMAL);
     }
 
     public static void saveOutputPolicyTo(InventoryHolder holder, OutputPolicy policy) {
-        savePolicy(holder, PluginKey.OUTPUT_POLICY, (byte) policy.ordinal());
+        savePolicy(holder, PluginKey.OUTPUT_POLICY, policy, OutputPolicy.NORMAL);
     }
 
     public static void saveLiquidsPolicyTo(InventoryHolder holder, LiquidsPolicy policy) {
-        savePolicy(holder, PluginKey.LIQUIDS_POLICY, (byte) policy.ordinal());
+        savePolicy(holder, PluginKey.LIQUIDS_POLICY, policy, LiquidsPolicy.NORMAL);
     }
 
     public TransferScheme(SelectionPolicy receive, SelectionPolicy serve, InputPolicy input, OutputPolicy output, LiquidsPolicy liquids) {
@@ -119,5 +126,16 @@ public class TransferScheme {
         saveInputPolicyTo(holder, INPUT);
         saveOutputPolicyTo(holder, OUTPUT);
         saveLiquidsPolicyTo(holder, LIQUIDS);
+    }
+
+    @Override
+    public String toString() {
+        return "TransferScheme{" +
+                "Receive." + RECEIVE +
+                ", Serve." + SERVE +
+                ", Input." + INPUT +
+                ", Output." + OUTPUT +
+                ", Liquids." + LIQUIDS +
+                '}';
     }
 }

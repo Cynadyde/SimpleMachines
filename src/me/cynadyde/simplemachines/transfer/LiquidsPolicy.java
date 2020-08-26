@@ -1,6 +1,6 @@
 package me.cynadyde.simplemachines.transfer;
 
-import me.cynadyde.simplemachines.util.Utils;
+import me.cynadyde.simplemachines.util.ItemUtils;
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 
@@ -26,7 +26,7 @@ public enum LiquidsPolicy implements TransferPolicy {
     POUR_INTO {
         @Override
         public boolean isDrainable(ItemStack item) {
-            return item != null && item.getAmount() == 1 && Utils.FILLED_BUCKETS.contains(item.getType());
+            return item != null && item.getAmount() == 1 && ItemUtils.FILLED_BUCKETS.contains(item.getType());
         }
 
         @Override

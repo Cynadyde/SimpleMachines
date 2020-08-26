@@ -2,7 +2,7 @@ package me.cynadyde.simplemachines.gui;
 
 import me.cynadyde.simplemachines.SimpleMachinesPlugin;
 import me.cynadyde.simplemachines.transfer.*;
-import me.cynadyde.simplemachines.util.Utils;
+import me.cynadyde.simplemachines.util.ItemUtils;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
@@ -37,10 +37,10 @@ public class ItemTransfererGui implements Listener {
     private final List<Integer> guiSlots = Collections.unmodifiableList(Arrays.asList(slotR, slotS, slotI, slotO, slotL));
 
     private final ItemStack gui0 = new ItemStack(Material.AIR, 0);
-    private final ItemStack gui1 = Utils.createGuiItem(Material.BLACK_STAINED_GLASS_PANE, " ", "");
-    private final ItemStack gui2 = Utils.createGuiItem(Material.WHITE_STAINED_GLASS_PANE, " ", "");
+    private final ItemStack gui1 = ItemUtils.createGuiItem(Material.BLACK_STAINED_GLASS_PANE, " ", "");
+    private final ItemStack gui2 = ItemUtils.createGuiItem(Material.WHITE_STAINED_GLASS_PANE, " ", "");
 
-    private final ItemStack guiR = Utils.createGuiItem(
+    private final ItemStack guiR = ItemUtils.createGuiItem(
             Material.DARK_OAK_SIGN, "§2Receive Policy",
             "§ePlace one of the following trapdoors",
             "§e to change the order to accept items.",
@@ -48,7 +48,7 @@ public class ItemTransfererGui implements Listener {
             "§fWARPED   §8->§b  Receive.RANDOM",
             "§fCRIMSON  §8->§b  Receive.ROUND_ROBIN"
     );
-    private final ItemStack guiS = Utils.createGuiItem(
+    private final ItemStack guiS = ItemUtils.createGuiItem(
             Material.BIRCH_SIGN, "§2Serve Policy",
             "§ePlace one of the following trapdoors",
             "§e to change the order to give out items.",
@@ -56,21 +56,21 @@ public class ItemTransfererGui implements Listener {
             "§fWARPED   §8->§b  Receive.RANDOM",
             "§fCRIMSON  §8->§b  Receive.ROUND_ROBIN"
     );
-    private final ItemStack guiI = Utils.createGuiItem(
+    private final ItemStack guiI = ItemUtils.createGuiItem(
             Material.SPRUCE_SIGN, "§2Input Policy",
             "§ePlace one of the following trapdoors",
             "§e to change which slots can accept items.",
             "§fSPRUCE  §8->§b  Input.TO_EMPTY",
             "§fBIRCH   §8->§b  Input.TO_NONEMPTY"
     );
-    private final ItemStack guiO = Utils.createGuiItem(
+    private final ItemStack guiO = ItemUtils.createGuiItem(
             Material.OAK_SIGN, "§2Output Policy",
             "§ePlace one of the following trapdoors",
             "§e to change which slots can give items.",
             "§fOAK       §8->§b  Output.FROM_SOLO",
             "§fDARK_OAK  §8->§b  Output.FROM_NONSOLO"
     );
-    private final ItemStack guiL = Utils.createGuiItem(
+    private final ItemStack guiL = ItemUtils.createGuiItem(
             Material.WARPED_SIGN, "§2Liquids Policy",
             "§ePlace one of the following trapdoors",
             "§e to change how buckets are transferred.",
@@ -134,7 +134,7 @@ public class ItemTransfererGui implements Listener {
                     Material token = item.getType();
                     for (int s : guiSlots) {
                         if (isGuiSlotTokenValid(s, token)) {
-                            if (Utils.isEmpty(gui.getTopInventory().getItem(s)))
+                            if (ItemUtils.isEmpty(gui.getTopInventory().getItem(s)))
                                 slot = s;
                             break;
                         }
@@ -230,11 +230,11 @@ public class ItemTransfererGui implements Listener {
         }
 
         public void saveData() {
-            SelectionPolicy retrieve = Objects.requireNonNull(SelectionPolicy.fromToken(Utils.getMaterial(view.getItem(slotR))));
-            SelectionPolicy serve = Objects.requireNonNull(SelectionPolicy.fromToken(Utils.getMaterial(view.getItem(slotS))));
-            InputPolicy input = Objects.requireNonNull(InputPolicy.fromToken(Utils.getMaterial(view.getItem(slotI))));
-            OutputPolicy output = Objects.requireNonNull(OutputPolicy.fromToken(Utils.getMaterial(view.getItem(slotO))));
-            LiquidsPolicy liquids = Objects.requireNonNull(LiquidsPolicy.fromToken(Utils.getMaterial(view.getItem(slotL))));
+            SelectionPolicy retrieve = Objects.requireNonNull(SelectionPolicy.fromToken(ItemUtils.getMaterial(view.getItem(slotR))));
+            SelectionPolicy serve = Objects.requireNonNull(SelectionPolicy.fromToken(ItemUtils.getMaterial(view.getItem(slotS))));
+            InputPolicy input = Objects.requireNonNull(InputPolicy.fromToken(ItemUtils.getMaterial(view.getItem(slotI))));
+            OutputPolicy output = Objects.requireNonNull(OutputPolicy.fromToken(ItemUtils.getMaterial(view.getItem(slotO))));
+            LiquidsPolicy liquids = Objects.requireNonNull(LiquidsPolicy.fromToken(ItemUtils.getMaterial(view.getItem(slotL))));
 
             TransferScheme scheme = new TransferScheme(retrieve, serve, input, output, liquids);
             scheme.applyTo(container);
