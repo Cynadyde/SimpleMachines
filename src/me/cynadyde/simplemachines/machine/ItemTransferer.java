@@ -6,18 +6,18 @@ import me.cynadyde.simplemachines.transfer.LiquidsPolicy;
 import me.cynadyde.simplemachines.transfer.TransferPolicy;
 import me.cynadyde.simplemachines.transfer.TransferScheme;
 import me.cynadyde.simplemachines.util.ItemUtils;
-import me.cynadyde.simplemachines.util.PluginKey;
 import me.cynadyde.simplemachines.util.ReflectiveUtils;
-import org.bukkit.Location;
-import org.bukkit.Material;
-import org.bukkit.block.BlockState;
-import org.bukkit.block.Container;
-import org.bukkit.block.Hopper;
+import org.bukkit.*;
+import org.bukkit.block.*;
+import org.bukkit.block.data.BlockData;
+import org.bukkit.block.data.Levelled;
+import org.bukkit.block.data.Waterlogged;
 import org.bukkit.entity.Item;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
-import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockDropItemEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.inventory.InventoryMoveItemEvent;
 import org.bukkit.event.inventory.InventoryPickupItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
@@ -25,52 +25,111 @@ import org.bukkit.inventory.EntityEquipment;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.BlockStateMeta;
+import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataContainer;
+import org.bukkit.persistence.PersistentDataHolder;
+import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.scheduler.BukkitTask;
 import org.spigotmc.SpigotWorldConfig;
 
 import java.util.Iterator;
+import java.util.Objects;
 
 public class ItemTransferer implements Listener {
 
-    // TODO hoppers suck in liquids above it (policy permitting)
-    //  grab the top source block if there is a column above the hopper
-    //  milk any cows above the hopper lol
-    //  No. don't do ANYTHING with entities involving hoppers.
-    //  this is the laggiest function of hoppers already.
-    //  Just iterate through the server's loaded tile entities
-    //  and have them check the block above (maybe reflection would
-    //  reveal a flag on their object?
-
     private final SimpleMachinesPlugin plugin;
     private InventoryMoveItemEvent lastSpammedInvMoveItemEvent;
+    private final BukkitTask liquidAbsorbTask;
 
     public ItemTransferer(SimpleMachinesPlugin plugin) {
         this.plugin = plugin;
         this.lastSpammedInvMoveItemEvent = null;
+
+        this.liquidAbsorbTask = plugin.getServer().getScheduler()
+                .runTaskTimer(plugin, this::onHopperTick, 0L, 4 * 20L);
+    }
+
+    public void cancelTasks() {
+        this.liquidAbsorbTask.cancel();
+    }
+
+    public void onHopperTick() {
+        for (World world : plugin.getServer().getWorlds()) {
+            for (Chunk chunk : world.getLoadedChunks()) {
+                for (BlockState tile : chunk.getTileEntities()) {
+                    if (tile instanceof Hopper) {
+
+                        Block base = tile.getBlock().getRelative(BlockFace.UP);
+                        if (base.isLiquid() || base.getBlockData() instanceof Waterlogged) {
+
+                            TransferScheme scheme = TransferScheme.ofHolder((PersistentDataHolder) tile);
+                            if (scheme.LIQUIDS == LiquidsPolicy.POUR_INTO) {
+
+                                Inventory dest = ((Hopper) tile).getInventory();
+                                performLiquidTransfer(base, dest, scheme);
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
-    public void onBlockBreak(BlockBreakEvent event) {
+    public void onBlockDropItem(BlockDropItemEvent event) {
         // anti grief plugins should have been able to cancel the event by now
-        BlockState state = event.getBlock().getState();
-        if (state instanceof Container) {
-            TransferScheme scheme = TransferScheme.ofHolder((Container) state);
-
+        if (event.getBlockState() instanceof Container) {
+            Container state = (Container) event.getBlockState();
+            TransferScheme scheme = TransferScheme.ofHolder(state);
             if (scheme.isNonNormal()) {
-                Location dest = state.getLocation().add(0.5, 0.5, 0.5);
-                for (TransferPolicy policy : scheme.getPolicies()) {
-                    if (!policy.getToken().isAir()) {
-                        state.getWorld().dropItemNaturally(dest, new ItemStack(policy.getToken()));
+
+                Item drop = null;
+                for (Item entity : event.getItems()) {
+                    ItemStack item = entity.getItemStack();
+                    if (item.getType() == state.getType()) {
+                        if (!state.getSnapshotInventory().contains(item)) {
+                            drop = entity;
+                            break;
+                        }
                     }
                 }
-                PersistentDataContainer pdc = ((Container) state).getPersistentDataContainer();
-                pdc.remove(PluginKey.RECEIVE_POLICY.get());
-                pdc.remove(PluginKey.INPUT_POLICY.get());
-                pdc.remove(PluginKey.SERVE_POLICY.get());
-                pdc.remove(PluginKey.OUTPUT_POLICY.get());
-                pdc.remove(PluginKey.LIQUIDS_POLICY.get());
+                if (drop != null) {
+                    // all these assumptions can be made since item & state types are equal
+                    ItemStack item = drop.getItemStack();
+                    BlockStateMeta meta = Objects.requireNonNull((BlockStateMeta) item.getItemMeta());
+                    Container dropState = (Container) meta.getBlockState();
+                    scheme.applyTo(dropState);
 
-                state.update();
+                    meta.setBlockState(dropState);
+                    item.setItemMeta(meta);
+                }
+                else {
+                    Location dest = state.getLocation().add(0.5, 0.5, 0.5);
+                    for (TransferPolicy policy : scheme.getPolicies()) {
+                        if (!policy.getToken().isAir()) {
+                            state.getWorld().dropItemNaturally(dest, new ItemStack(policy.getToken()));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
+    public void onBlockPlace(BlockPlaceEvent event) {
+        BlockState placed = event.getBlockPlaced().getState();
+        if (placed instanceof PersistentDataHolder) {
+            PersistentDataContainer placedPdc = ((PersistentDataHolder) placed).getPersistentDataContainer();
+            ItemMeta meta = event.getItemInHand().getItemMeta();
+            if (meta instanceof BlockStateMeta) {
+                BlockState held = ((BlockStateMeta) meta).getBlockState();
+                if (held instanceof PersistentDataHolder) {
+                    PersistentDataContainer heldPdc = ((PersistentDataHolder) held).getPersistentDataContainer();
+                    for (NamespacedKey key : heldPdc.getKeys()) {
+                        // TODO HOW????
+                    }
+                }
             }
         }
     }
@@ -89,7 +148,7 @@ public class ItemTransferer implements Listener {
                         if (scheme.LIQUIDS == LiquidsPolicy.POUR_INTO) {
 
                             Inventory dest = ((Container) state).getInventory();
-                            int leftovers = performItemInput(dest, item, scheme);
+                            int leftovers = performInventoryInput(dest, item, scheme);
                             if (leftovers == 0) {
                                 EntityEquipment equipment = event.getPlayer().getEquipment();
                                 if (equipment != null) {
@@ -107,7 +166,7 @@ public class ItemTransferer implements Listener {
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
     public void onInventoryPickupItem(InventoryPickupItemEvent event) {
         final Inventory dest = event.getInventory();
-        final TransferScheme scheme = TransferScheme.ofHolder(dest.getHolder());
+        final TransferScheme scheme = TransferScheme.ofInvHolder(dest.getHolder());
 
         boolean takeover = scheme.isNonNormal();
 
@@ -171,19 +230,12 @@ public class ItemTransferer implements Listener {
             final boolean pushed = event.getInitiator() == event.getSource();
 
             /* now, mimic the event with all the needed control. */
-            Runnable task = () -> performItemTransfer(source, dest, amount, pushed, scheme);
+            Runnable task = () -> performInventoryTransfer(source, dest, amount, pushed, scheme);
             plugin.getServer().getScheduler().runTaskLater(plugin, task, 0L);
         }
     }
 
-    public void performItemTransfer(Inventory source, Inventory dest, int amount, boolean pushed, TransferScheme scheme) {
-
-        if (isTargeted(source, dest)) {
-            System.out.println("++++++++++++++");
-            System.out.println("SOURCE " + source.getType() + " has Serve." + scheme.SERVE + " and Output." + scheme.OUTPUT);
-            System.out.println("DEST " + dest.getType() + " has Receive." + scheme.RECEIVE + " and Input." + scheme.INPUT);
-        }
-
+    public void performInventoryTransfer(Inventory source, Inventory dest, int amount, boolean pushed, TransferScheme scheme) {
         InventoryHolder holder = source.getHolder();
         Iterator<Integer> slots = scheme.SERVE.getIterator(holder);
         while (slots.hasNext()) {
@@ -193,15 +245,10 @@ public class ItemTransferer implements Listener {
             if (scheme.OUTPUT.testSlot(current) && !scheme.LIQUIDS.isFillable(current)) {
 
                 ItemStack transfer = current.clone();
-
                 int taken = Math.min(amount, current.getAmount());
                 transfer.setAmount(taken);
 
-                if (isTargeted(source, dest)) {
-                    System.out.println("TAKING " + transfer + " FROM SOURCE SLOT " + slot + " LEAVING " + current);
-                }
-
-                int leftover = performItemInput(dest, transfer, scheme);
+                int leftover = performInventoryInput(dest, transfer, scheme);
 
                 if (scheme.LIQUIDS.isDrainable(current) && leftover == 0) {
                     // the contents of the bucket are transferred, but not the bucket
@@ -223,39 +270,13 @@ public class ItemTransferer implements Listener {
                 if (leftover == 0) {
                     break;
                 }
-                else {
-                    if (isTargeted(source, dest)) {
-                        System.out.println("RECALLING " + leftover + " TO SOURCE SLOT " + slot + " TO MAKE " + current);
-                    }
-                }
             }
-        }
-
-//        // update the persistent data container for round robin mode to remember its last slot!
-//        if (scheme.SERVE == SelectionPolicy.ROUND_ROBIN) {
-//            System.out.println("source.getHolder() == " + source.getHolder());
-//            if (source.getHolder() instanceof BlockState) {
-//                ((BlockState) source.getHolder()).update(false, false);
-//            }
-//        }
-        if (isTargeted(source, dest)) {
-            System.out.println("--------------");
         }
     }
 
     public void performItemTransfer(Item item, Inventory dest, TransferScheme scheme) {
+        int leftover = performInventoryInput(dest, item.getItemStack(), scheme);
 
-        if (isTargeted(dest)) {
-            System.out.println("++++++++++++++");
-            System.out.println("SOURCE ITEM ENTITY");
-            System.out.println("DEST " + dest.getType() + " has Receive." + scheme.RECEIVE + " and Input." + scheme.INPUT);
-        }
-
-        int leftover = performItemInput(dest, item.getItemStack(), scheme);
-
-        if (isTargeted(dest)) {
-            System.out.println("ITEM ENTITY HAS " + leftover + " REMAINING");
-        }
         if (leftover == 0) {
             item.remove();
         }
@@ -264,14 +285,51 @@ public class ItemTransferer implements Listener {
             content.setAmount(leftover);
             item.setItemStack(content);
         }
-        if (isTargeted(dest)) {
-            System.out.println("--------------");
+    }
+
+    public void performLiquidTransfer(Block block, Inventory dest, TransferScheme scheme) {
+        if (scheme.LIQUIDS != LiquidsPolicy.POUR_INTO) {
+            return;
+        }
+        boolean isWater;
+        if (isInWater(block)) {
+            isWater = true;
+        }
+        else if (isInLava(block)) {
+            isWater = false;
+        }
+        else {
+            return;
+        }
+        Block source = null;
+        Block seeker = block;
+        int limit = block.getWorld().getMaxHeight() - 1;
+        do {
+            if (canDrain(seeker)) {
+                source = seeker;
+            }
+            if (seeker.getY() >= limit) {
+                break;
+            }
+            seeker = seeker.getRelative(BlockFace.UP, 1);
+        }
+        while (isWater ? isInWater(seeker) : isInLava(seeker));
+
+        if (source != null) {
+            ItemStack item = new ItemStack(isWater ? Material.WATER_BUCKET : Material.LAVA_BUCKET, 1);
+            int leftover = performInventoryInput(dest, item, scheme);
+
+            if (leftover == 0) {
+                drainFluid(source);
+                Sound sound = isWater ? Sound.ITEM_BUCKET_FILL : Sound.ITEM_BUCKET_FILL_LAVA;
+                block.getWorld().playSound(block.getLocation().add(0.5, 0.5, 0.5), sound, SoundCategory.BLOCKS, 1F, 1F);
+            }
         }
     }
 
-    public int performItemInput(Inventory dest, ItemStack transfer, TransferScheme scheme) {
-
+    public int performInventoryInput(Inventory dest, ItemStack transfer, TransferScheme scheme) {
         int leftovers = transfer.getAmount();
+
         InventoryHolder holder = dest.getHolder();
         Iterator<Integer> slots;
 
@@ -306,10 +364,6 @@ public class ItemTransferer implements Listener {
                         total -= overflow;
                         leftovers -= (total - current.getAmount());
 
-                        if (isTargeted(dest)) {
-                            System.out.println("FOUND SPACE FOR " + transfer + " AT DEST SLOT " + slot + " WITH " + current);
-                        }
-
                         current.setAmount(total);
                         dest.setItem(slot, current);
                     }
@@ -325,19 +379,12 @@ public class ItemTransferer implements Listener {
                     ItemStack current = dest.getItem(slot);
                     if (current == null) {
 
-                        if (isTargeted(dest)) {
-                            System.out.println("FOUND SPACE FOR " + transfer + " AT DEST SLOT " + slot);
-                        }
-
                         dest.setItem(slot, transfer);
                         leftovers = 0;
                     }
                 }
             }
         }
-//        if (scheme.RECEIVE == SelectionPolicy.ROUND_ROBIN && holder instanceof BlockState) {
-//            ((BlockState) holder).update(false, false);
-//        }
         return leftovers;
     }
 
@@ -365,19 +412,42 @@ public class ItemTransferer implements Listener {
         return 1;
     }
 
-    // debug purposes...
-    private boolean isTargeted(Inventory... inventories) {
-        for (Inventory inv : inventories) {
-            if (inv != null && inv.getHolder() != null) {
-                if (inv.getHolder() instanceof BlockState) {
-                    if (((BlockState) inv.getHolder()).isPlaced()) {
-                        if (((BlockState) inv.getHolder()).getBlock().equals(plugin.target)) {
-                            return true;
-                        }
-                    }
-                }
-            }
+    private boolean isInWater(Block block) {
+        if (block.getType() == Material.WATER) {
+            return true;
+        }
+        BlockData data = block.getBlockData();
+        if (data instanceof Waterlogged) {
+            return ((Waterlogged) data).isWaterlogged();
         }
         return false;
+    }
+
+    private boolean isInLava(Block block) {
+        return block.getType() == Material.LAVA;
+    }
+
+    private boolean canDrain(Block block) {
+        BlockData data = block.getBlockData();
+        if (block.isLiquid() && data instanceof Levelled) {
+            return ((Levelled) data).getLevel() == 0;
+        }
+        else if (data instanceof Waterlogged) {
+            return ((Waterlogged) data).isWaterlogged();
+        }
+        return false;
+    }
+
+    private void drainFluid(Block block) {
+        if (block.isLiquid()) {
+            block.setType(Material.AIR);
+        }
+        else {
+            BlockData data = block.getBlockData();
+            if (data instanceof Waterlogged) {
+                ((Waterlogged) data).setWaterlogged(false);
+                block.setBlockData(data);
+            }
+        }
     }
 }

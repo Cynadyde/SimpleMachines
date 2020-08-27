@@ -9,13 +9,15 @@ import org.bukkit.persistence.PersistentDataType;
 
 public class TransferScheme {
 
+    public static final TransferScheme NORMAL = new TransferScheme(SelectionPolicy.NORMAL, SelectionPolicy.NORMAL, InputPolicy.NORMAL, OutputPolicy.NORMAL, LiquidsPolicy.NORMAL);
+
     public final SelectionPolicy RECEIVE;
     public final SelectionPolicy SERVE;
     public final InputPolicy INPUT;
     public final OutputPolicy OUTPUT;
     public final LiquidsPolicy LIQUIDS;
 
-    public static TransferScheme ofHolder(InventoryHolder holder) {
+    public static TransferScheme ofHolder(PersistentDataHolder holder) {
         return new TransferScheme(
                 loadReceivePolicyFrom(holder),
                 loadServePolicyFrom(holder),
@@ -24,79 +26,80 @@ public class TransferScheme {
                 loadLiquidsPolicyFrom(holder));
     }
 
-    public static TransferScheme ofTransaction(Inventory source, Inventory dest) {
-        InventoryHolder i = dest != null ? dest.getHolder() : null;
-        InventoryHolder o = source != null ? source.getHolder() : null;
-        return new TransferScheme(
-                loadReceivePolicyFrom(i),
-                loadServePolicyFrom(o),
-                loadInputPolicyFrom(i),
-                loadOutputPolicyFrom(o),
-                loadLiquidsPolicyFrom(i));
+    public static TransferScheme ofInvHolder(InventoryHolder holder) {
+        return holder instanceof PersistentDataHolder ? ofHolder((PersistentDataHolder) holder) : NORMAL;
     }
 
-    private static <T extends Enum<?> & TransferPolicy> T loadPolicy(InventoryHolder holder, PluginKey key, T[] values, T fallback) {
-        if (holder instanceof PersistentDataHolder) {
-            PersistentDataContainer pdc = ((PersistentDataHolder) holder).getPersistentDataContainer();
-            Byte data = pdc.get(key.get(), PersistentDataType.BYTE);
-            if (data != null && 0 <= data && data < values.length) {
-                return values[data];
-            }
+    public static TransferScheme ofTransaction(Inventory source, Inventory dest) {
+        PersistentDataHolder i = dest.getHolder() instanceof PersistentDataHolder ? (PersistentDataHolder) dest.getHolder() : null;
+        PersistentDataHolder o = source.getHolder() instanceof PersistentDataHolder ? (PersistentDataHolder) source.getHolder() : null;
+        return new TransferScheme(
+                i != null ? loadReceivePolicyFrom(i) : SelectionPolicy.NORMAL,
+                o != null ? loadServePolicyFrom(o) : SelectionPolicy.NORMAL,
+                i != null ? loadInputPolicyFrom(i) : InputPolicy.NORMAL,
+                o != null ? loadOutputPolicyFrom(o) : OutputPolicy.NORMAL,
+                i != null ? loadLiquidsPolicyFrom(i) : LiquidsPolicy.NORMAL);
+    }
+
+    private static <T extends Enum<?> & TransferPolicy> T loadPolicy(PersistentDataHolder holder, PluginKey key, T[] values, T fallback) {
+        PersistentDataContainer pdc = holder.getPersistentDataContainer();
+        Byte data = pdc.get(key.get(), PersistentDataType.BYTE);
+        if (data != null && 0 <= data && data < values.length) {
+            return values[data];
         }
+
         return fallback;
     }
 
-    private static <T extends Enum<?> & TransferPolicy> void savePolicy(InventoryHolder holder, PluginKey key, T value, T fallback) {
-        if (holder instanceof PersistentDataHolder) {
-            PersistentDataContainer pdc = ((PersistentDataHolder) holder).getPersistentDataContainer();
-            byte data = (byte) value.ordinal();
-            byte zero = (byte) fallback.ordinal();
-            if (data != zero) {
-                pdc.set(key.get(), PersistentDataType.BYTE, data);
-            }
-            else {
-                pdc.remove(key.get());
-            }
+    private static <T extends Enum<?> & TransferPolicy> void savePolicy(PersistentDataHolder holder, PluginKey key, T value, T fallback) {
+        PersistentDataContainer pdc = holder.getPersistentDataContainer();
+        byte data = (byte) value.ordinal();
+        byte zero = (byte) fallback.ordinal();
+        if (data != zero) {
+            pdc.set(key.get(), PersistentDataType.BYTE, data);
+        }
+        else {
+            pdc.remove(key.get());
         }
     }
 
-    public static SelectionPolicy loadReceivePolicyFrom(InventoryHolder holder) {
+    public static SelectionPolicy loadReceivePolicyFrom(PersistentDataHolder holder) {
         return loadPolicy(holder, PluginKey.RECEIVE_POLICY, SelectionPolicy.values(), SelectionPolicy.NORMAL);
     }
 
-    public static SelectionPolicy loadServePolicyFrom(InventoryHolder holder) {
+    public static SelectionPolicy loadServePolicyFrom(PersistentDataHolder holder) {
         return loadPolicy(holder, PluginKey.SERVE_POLICY, SelectionPolicy.values(), SelectionPolicy.NORMAL);
     }
 
-    public static InputPolicy loadInputPolicyFrom(InventoryHolder holder) {
+    public static InputPolicy loadInputPolicyFrom(PersistentDataHolder holder) {
         return loadPolicy(holder, PluginKey.INPUT_POLICY, InputPolicy.values(), InputPolicy.NORMAL);
     }
 
-    public static OutputPolicy loadOutputPolicyFrom(InventoryHolder holder) {
+    public static OutputPolicy loadOutputPolicyFrom(PersistentDataHolder holder) {
         return loadPolicy(holder, PluginKey.OUTPUT_POLICY, OutputPolicy.values(), OutputPolicy.NORMAL);
     }
 
-    public static LiquidsPolicy loadLiquidsPolicyFrom(InventoryHolder holder) {
+    public static LiquidsPolicy loadLiquidsPolicyFrom(PersistentDataHolder holder) {
         return loadPolicy(holder, PluginKey.LIQUIDS_POLICY, LiquidsPolicy.values(), LiquidsPolicy.NORMAL);
     }
 
-    public static void saveReceivePolicyTo(InventoryHolder holder, SelectionPolicy policy) {
+    public static void saveReceivePolicyTo(PersistentDataHolder holder, SelectionPolicy policy) {
         savePolicy(holder, PluginKey.RECEIVE_POLICY, policy, SelectionPolicy.NORMAL);
     }
 
-    public static void saveServePolicyTo(InventoryHolder holder, SelectionPolicy policy) {
+    public static void saveServePolicyTo(PersistentDataHolder holder, SelectionPolicy policy) {
         savePolicy(holder, PluginKey.SERVE_POLICY, policy, SelectionPolicy.NORMAL);
     }
 
-    public static void saveInputPolicyTo(InventoryHolder holder, InputPolicy policy) {
+    public static void saveInputPolicyTo(PersistentDataHolder holder, InputPolicy policy) {
         savePolicy(holder, PluginKey.INPUT_POLICY, policy, InputPolicy.NORMAL);
     }
 
-    public static void saveOutputPolicyTo(InventoryHolder holder, OutputPolicy policy) {
+    public static void saveOutputPolicyTo(PersistentDataHolder holder, OutputPolicy policy) {
         savePolicy(holder, PluginKey.OUTPUT_POLICY, policy, OutputPolicy.NORMAL);
     }
 
-    public static void saveLiquidsPolicyTo(InventoryHolder holder, LiquidsPolicy policy) {
+    public static void saveLiquidsPolicyTo(PersistentDataHolder holder, LiquidsPolicy policy) {
         savePolicy(holder, PluginKey.LIQUIDS_POLICY, policy, LiquidsPolicy.NORMAL);
     }
 
@@ -120,7 +123,7 @@ public class TransferScheme {
         return new TransferPolicy[] { RECEIVE, SERVE, INPUT, OUTPUT, LIQUIDS };
     }
 
-    public void applyTo(InventoryHolder holder) {
+    public void applyTo(PersistentDataHolder holder) {
         saveReceivePolicyTo(holder, RECEIVE);
         saveServePolicyTo(holder, SERVE);
         saveInputPolicyTo(holder, INPUT);

@@ -83,17 +83,15 @@ public class AutoCrafter implements Listener {
         if (contents.length != 9) {
             throw new IllegalArgumentException("contents array must be of length 9");
         }
-
         boolean notEmpty = false;
-        boolean keepOne = output == OutputPolicy.FROM_NONSOLO;
         ItemStack[] ingredients = new ItemStack[contents.length];
 
         /* either everything is able to be pulled out or nothing will be...
             this protects against crafting unexpected recipes from partial ingredients */
         for (int i = 0; i < contents.length; i++) {
             ItemStack item = contents[i];
-            if (item != null && !item.getType().isAir() && item.getAmount() > 0) {
-                if (keepOne && item.getAmount() == 1 && item.getMaxStackSize() > 1) {
+            if (!ItemUtils.isEmpty(item)) {
+                if (!output.testSlot(item)) {
                     return null;
                 }
                 else {

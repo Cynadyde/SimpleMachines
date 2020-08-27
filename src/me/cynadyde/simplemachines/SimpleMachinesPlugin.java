@@ -14,6 +14,16 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 public class SimpleMachinesPlugin extends JavaPlugin implements Listener {
 
+    // TODO iron trapdoor for liqwuids mode and jungle for normal order (so that dispenser behavior can be overriden!)
+
+    // TODO wrench module (right click hoe (non-sneak) to rotate blocks!)
+
+    // TODO separate method from itemInput for POUR_INTO policy so that stacks of empty buckets can be used
+
+    // TODO retire the hopper-suck-liquid and interact-container-pour functionality
+
+    // TODO very simple dropper-into-glass item piping system
+
     public Block target = null;  // debug purposes
 
     private AutoCrafter autoCrafterModule;
@@ -39,6 +49,7 @@ public class SimpleMachinesPlugin extends JavaPlugin implements Listener {
 
     @Override
     public void onDisable() {
+        itemTransfererModule.cancelTasks();
         itemTransfererGuiModule.closeAllGuis();
         blockBreakerModule.cancelAllJobs();
     }

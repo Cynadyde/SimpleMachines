@@ -15,6 +15,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.SkullMeta;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataHolder;
+import org.bukkit.util.Vector;
 import org.spigotmc.SpigotWorldConfig;
 
 import java.lang.reflect.Constructor;
@@ -215,7 +216,7 @@ public class ReflectiveUtils {
             if (obcCraftItemStack.isInstance(item)) {
                 Object nmsItemObj = nmsItemStackGetItem.invoke(obcCraftItemStackHandle.get(item));
                 Object nmsItemObjResult = nmsItemGetCraftingRemainingItem.invoke(nmsItemObj);
-                ItemStack result = (ItemStack) obcCraftItemStackAsNewCraftStack.invoke(nmsItemObjResult);
+                ItemStack result = (ItemStack) obcCraftItemStackAsNewCraftStack.invoke(null, nmsItemObjResult);
                 return ItemUtils.isEmpty(result) ? null : result;
             }
         }
@@ -271,10 +272,26 @@ public class ReflectiveUtils {
         ((CraftPlayer) player).getHandle().playerConnection.sendPacket(packet);
     }
 
+    public static void stopDispenserSounds(Block block) {
+        // TODO reflection
+        for (String action : new String[] { "dispense", "launch", "fail" }) {
+            MinecraftKey soundEffectKey = new MinecraftKey("block.dispenser" + action);
+            PacketPlayOutStopSound packet = new PacketPlayOutStopSound(soundEffectKey, SoundCategory.BLOCKS);
+
+            for (Player player : block.getWorld().getPlayers()) {
+                Vector origin = block.getLocation().add(0.5, 0.5, 0.5).toVector();
+                if (player.getLocation().toVector().isInSphere(origin, 16)) {
+
+                    ((CraftPlayer) player).getHandle().playerConnection.sendPacket(packet);
+                }
+            }
+        }
+    }
+
     public static void playBlockPlaceSound(Block block) {
         // TODO reflection
         SoundEffect s = ((CraftBlock) block).getNMS().getStepSound().e();
-        ((CraftWorld) block.getWorld()).getHandle().playSound((EntityHuman) null, ((CraftBlock) block).getPosition(), s, SoundCategory.BLOCKS, 0.6F, 0.65F);
+        ((CraftWorld) block.getWorld()).getHandle().playSound((EntityHuman) null, ((CraftBlock) block).getPosition(), s, SoundCategory.BLOCKS, 1.0F, 1.0F);
     }
 
     public static void playBlockHitSound(Block block) {
@@ -346,11 +363,8 @@ public class ReflectiveUtils {
             catch (IllegalAccessException | InvocationTargetException | ClassCastException | NullPointerException ex) {
                 logReflectionError("TileEntity#persistentDataContainer", ex);
             }
-            throw new NullPointerException("could not get PersistentDataContainer from TileState: " + dataHolder);
         }
-        else {
-            return dataHolder.getPersistentDataContainer();
-        }
+        return dataHolder.getPersistentDataContainer();
     }
 
     public static SpigotWorldConfig getWorldConfigFor(InventoryHolder holder) {
