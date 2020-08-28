@@ -2,7 +2,6 @@ package me.cynadyde.simplemachines.transfer;
 
 import me.cynadyde.simplemachines.util.PluginKey;
 import org.bukkit.inventory.Inventory;
-import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataHolder;
 import org.bukkit.persistence.PersistentDataType;
@@ -17,28 +16,30 @@ public class TransferScheme {
     public final OutputPolicy OUTPUT;
     public final LiquidsPolicy LIQUIDS;
 
-    public static TransferScheme ofHolder(PersistentDataHolder holder) {
-        return new TransferScheme(
-                loadReceivePolicyFrom(holder),
-                loadServePolicyFrom(holder),
-                loadInputPolicyFrom(holder),
-                loadOutputPolicyFrom(holder),
-                loadLiquidsPolicyFrom(holder));
-    }
-
-    public static TransferScheme ofInvHolder(InventoryHolder holder) {
-        return holder instanceof PersistentDataHolder ? ofHolder((PersistentDataHolder) holder) : NORMAL;
+    public static TransferScheme ofHolder(Object persistentDataHolder) {
+        if (persistentDataHolder instanceof PersistentDataHolder) {
+            PersistentDataHolder holder = (PersistentDataHolder) persistentDataHolder;
+            return new TransferScheme(
+                    loadReceivePolicyFrom(holder),
+                    loadServePolicyFrom(holder),
+                    loadInputPolicyFrom(holder),
+                    loadOutputPolicyFrom(holder),
+                    loadLiquidsPolicyFrom(holder));
+        }
+        else {
+            return NORMAL;
+        }
     }
 
     public static TransferScheme ofTransaction(Inventory source, Inventory dest) {
-        PersistentDataHolder i = dest.getHolder() instanceof PersistentDataHolder ? (PersistentDataHolder) dest.getHolder() : null;
-        PersistentDataHolder o = source.getHolder() instanceof PersistentDataHolder ? (PersistentDataHolder) source.getHolder() : null;
+        PersistentDataHolder d = dest.getHolder() instanceof PersistentDataHolder ? (PersistentDataHolder) dest.getHolder() : null;
+        PersistentDataHolder s = source.getHolder() instanceof PersistentDataHolder ? (PersistentDataHolder) source.getHolder() : null;
         return new TransferScheme(
-                i != null ? loadReceivePolicyFrom(i) : SelectionPolicy.NORMAL,
-                o != null ? loadServePolicyFrom(o) : SelectionPolicy.NORMAL,
-                i != null ? loadInputPolicyFrom(i) : InputPolicy.NORMAL,
-                o != null ? loadOutputPolicyFrom(o) : OutputPolicy.NORMAL,
-                i != null ? loadLiquidsPolicyFrom(i) : LiquidsPolicy.NORMAL);
+                d != null ? loadReceivePolicyFrom(d) : SelectionPolicy.NORMAL,
+                s != null ? loadServePolicyFrom(s) : SelectionPolicy.NORMAL,
+                d != null ? loadInputPolicyFrom(d) : InputPolicy.NORMAL,
+                s != null ? loadOutputPolicyFrom(s) : OutputPolicy.NORMAL,
+                d != null ? loadLiquidsPolicyFrom(d) : LiquidsPolicy.NORMAL);
     }
 
     private static <T extends Enum<?> & TransferPolicy> T loadPolicy(PersistentDataHolder holder, PluginKey key, T[] values, T fallback) {
@@ -123,12 +124,16 @@ public class TransferScheme {
         return new TransferPolicy[] { RECEIVE, SERVE, INPUT, OUTPUT, LIQUIDS };
     }
 
-    public void applyTo(PersistentDataHolder holder) {
-        saveReceivePolicyTo(holder, RECEIVE);
-        saveServePolicyTo(holder, SERVE);
-        saveInputPolicyTo(holder, INPUT);
-        saveOutputPolicyTo(holder, OUTPUT);
-        saveLiquidsPolicyTo(holder, LIQUIDS);
+    public void applyTo(Object persistentDataHolder) {
+        if (persistentDataHolder instanceof PersistentDataHolder) {
+            PersistentDataHolder holder = (PersistentDataHolder) persistentDataHolder;
+
+            saveReceivePolicyTo(holder, RECEIVE);
+            saveServePolicyTo(holder, SERVE);
+            saveInputPolicyTo(holder, INPUT);
+            saveOutputPolicyTo(holder, OUTPUT);
+            saveLiquidsPolicyTo(holder, LIQUIDS);
+        }
     }
 
     @Override

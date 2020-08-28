@@ -1,5 +1,6 @@
 package me.cynadyde.simplemachines.util;
 
+import org.bukkit.DyeColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
@@ -35,6 +36,42 @@ public class ItemUtils {
             BlockFace.NORTH, BlockFace.EAST, BlockFace.SOUTH, BlockFace.WEST, BlockFace.UP, BlockFace.DOWN));
 
     /**
+     * The sixteen rotations.
+     */
+    public static final List<BlockFace> ROTATIONS = Collections.unmodifiableList(Arrays.asList(
+            BlockFace.NORTH, BlockFace.NORTH_NORTH_EAST, BlockFace.NORTH_EAST, BlockFace.EAST_NORTH_EAST,
+            BlockFace.EAST, BlockFace.EAST_SOUTH_EAST, BlockFace.SOUTH_EAST, BlockFace.SOUTH_SOUTH_EAST,
+            BlockFace.SOUTH, BlockFace.SOUTH_SOUTH_WEST, BlockFace.SOUTH_WEST, BlockFace.WEST_SOUTH_WEST,
+            BlockFace.WEST, BlockFace.WEST_NORTH_WEST, BlockFace.NORTH_WEST, BlockFace.NORTH_NORTH_WEST));
+
+    /**
+     * A list of every torch type.
+     */
+    public static final List<Material> TORCHES = Collections.unmodifiableList(Arrays.asList(
+            Material.TORCH, Material.WALL_TORCH,
+            Material.SOUL_TORCH, Material.SOUL_WALL_TORCH,
+            Material.REDSTONE_TORCH, Material.REDSTONE_WALL_TORCH));
+
+    // corresponds to DyeColor.values()
+    public static final List<Material> STAINED_GLASS = Collections.unmodifiableList(Arrays.asList(
+            Material.WHITE_STAINED_GLASS,
+            Material.ORANGE_STAINED_GLASS,
+            Material.MAGENTA_STAINED_GLASS,
+            Material.LIGHT_BLUE_STAINED_GLASS,
+            Material.YELLOW_STAINED_GLASS,
+            Material.LIME_STAINED_GLASS,
+            Material.PINK_STAINED_GLASS,
+            Material.GRAY_STAINED_GLASS,
+            Material.LIGHT_GRAY_STAINED_GLASS,
+            Material.CYAN_STAINED_GLASS,
+            Material.PURPLE_STAINED_GLASS,
+            Material.BLUE_STAINED_GLASS,
+            Material.BROWN_STAINED_GLASS,
+            Material.GREEN_STAINED_GLASS,
+            Material.RED_STAINED_GLASS,
+            Material.BLACK_STAINED_GLASS));
+
+    /**
      * A list of every tool that can speed up destroying some blocks.
      */
     public static final List<Material> TOOLS = Collections.unmodifiableList(Arrays.asList(
@@ -45,6 +82,12 @@ public class ItemUtils {
             Material.WOODEN_SWORD, Material.STONE_SWORD, Material.IRON_SWORD, Material.GOLDEN_SWORD, Material.DIAMOND_SWORD, Material.NETHERITE_SWORD,
             Material.SHEARS
     ));
+
+    /**
+     * A list of each type of hoe.
+     */
+    public static final List<Material> HOES = Collections.unmodifiableList(Arrays.asList(
+            Material.WOODEN_HOE, Material.STONE_HOE, Material.IRON_HOE, Material.GOLDEN_HOE, Material.DIAMOND_HOE, Material.NETHERITE_HOE));
 
     /**
      * A list of all bucket materials except the empty bucket.

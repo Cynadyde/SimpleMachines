@@ -42,6 +42,13 @@ public class BlockBreaker implements Listener {
         this.jobs = new HashMap<>();
     }
 
+    public void cancelAllJobs() {
+        for (BukkitTask task : jobs.values()) {
+            task.cancel();
+        }
+        jobs.clear();
+    }
+
     @EventHandler
     public void onBlockDispense(BlockDispenseEvent event) {
         if (isBlockBreakerMachine(event.getBlock())) {
@@ -216,11 +223,11 @@ public class BlockBreaker implements Listener {
         }
     }
 
-    public boolean isBreakable(Block block) {
+    private boolean isBreakable(Block block) {
         return !block.getType().isAir() && !block.isLiquid() && block.getType().getHardness() >= 0;
     }
 
-    public Integer getRandomToolSlot(Inventory inv, Block toolTarget) {
+    private Integer getRandomToolSlot(Inventory inv, Block toolTarget) {
         ItemStack[] contents = inv.getContents();
         Integer fallback = null;
         Iterator<Integer> iterator = new RandomPermuteIterator(0, contents.length);
@@ -237,18 +244,18 @@ public class BlockBreaker implements Listener {
         return fallback;
     }
 
-    public boolean isTool(ItemStack tool) {
+    private boolean isTool(ItemStack tool) {
         return tool != null && ItemUtils.TOOLS.contains(tool.getType());
     }
 
-    public boolean isHarvestedBy(Block block, ItemStack tool) {
+    private boolean isHarvestedBy(Block block, ItemStack tool) {
         if (ReflectiveUtils.isSpecialToolRequired(block)) {
             return ReflectiveUtils.canBreakSpecialBlock(block, tool);
         }
         return true;
     }
 
-    public int getDestroyTime(Block block, ItemStack tool) {
+    private int getDestroyTime(Block block, ItemStack tool) {
         if (!isBreakable(block)) {
             throw new IllegalArgumentException("block is not breakable");
         }
@@ -264,12 +271,5 @@ public class BlockBreaker implements Listener {
             }
         }
         return (int) Math.ceil((seconds / speed) * 20);
-    }
-
-    public void cancelAllJobs() {
-        for (BukkitTask task : jobs.values()) {
-            task.cancel();
-        }
-        jobs.clear();
     }
 }

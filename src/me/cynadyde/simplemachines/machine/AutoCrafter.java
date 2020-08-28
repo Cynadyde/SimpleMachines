@@ -3,7 +3,6 @@ package me.cynadyde.simplemachines.machine;
 import me.cynadyde.simplemachines.SimpleMachinesPlugin;
 import me.cynadyde.simplemachines.transfer.OutputPolicy;
 import me.cynadyde.simplemachines.transfer.TransferScheme;
-import me.cynadyde.simplemachines.util.ReflectiveUtils;
 import me.cynadyde.simplemachines.util.ItemUtils;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
@@ -79,7 +78,7 @@ public class AutoCrafter implements Listener {
         }
     }
 
-    public ItemStack[] calcIngredients(ItemStack[] contents, OutputPolicy output) {
+    private ItemStack[] calcIngredients(ItemStack[] contents, OutputPolicy output) {
         if (contents.length != 9) {
             throw new IllegalArgumentException("contents array must be of length 9");
         }
@@ -105,7 +104,7 @@ public class AutoCrafter implements Listener {
         return notEmpty ? ingredients : null;
     }
 
-    public ItemStack[] calcLeftovers(ItemStack[] contents, ItemStack[] consumed) {
+    private ItemStack[] calcLeftovers(ItemStack[] contents, ItemStack[] consumed) {
         if (contents.length != 9) {
             throw new IllegalArgumentException("contents array must be of length 9");
         }
@@ -124,7 +123,8 @@ public class AutoCrafter implements Listener {
                 int taken = consumed[i] == null ? 0 : consumed[i].getAmount();
                 item.setAmount(item.getAmount() - taken);
                 if (ItemUtils.isEmpty(item)) {
-                    item = ReflectiveUtils.getCraftingRemainder(c);
+                    Material remainder = c.getType().getCraftingRemainingItem();
+                    item = remainder != null ? new ItemStack(remainder, c.getAmount()) : null;
                 }
                 results[i] = item;
             }
@@ -132,7 +132,7 @@ public class AutoCrafter implements Listener {
         return results;
     }
 
-    public Recipe getBestRecipeMatch(ItemStack[] ingredients) {
+    private Recipe getBestRecipeMatch(ItemStack[] ingredients) {
         /* yeah, for some reason bukkit doesn't actually
             have a method for this, so here it goes... */
         if (ingredients.length != 9) {

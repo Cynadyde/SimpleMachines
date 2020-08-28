@@ -144,7 +144,7 @@ public class BlockPlacer implements Listener {
         }
     }
 
-    public boolean canPlaceItemAt(ItemStack item, Block block) {
+    private boolean canPlaceItemAt(ItemStack item, Block block) {
         return item.getType().isBlock() && ReflectiveUtils.canPlaceOn(item, block);
     }
 }

@@ -16,8 +16,7 @@ import org.bukkit.entity.Item;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
-import org.bukkit.event.block.BlockDropItemEvent;
-import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.inventory.InventoryMoveItemEvent;
 import org.bukkit.event.inventory.InventoryPickupItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
@@ -25,16 +24,11 @@ import org.bukkit.inventory.EntityEquipment;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.BlockStateMeta;
-import org.bukkit.inventory.meta.ItemMeta;
-import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataHolder;
-import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.scheduler.BukkitTask;
 import org.spigotmc.SpigotWorldConfig;
 
 import java.util.Iterator;
-import java.util.Objects;
 
 public class ItemTransferer implements Listener {
 
@@ -77,57 +71,19 @@ public class ItemTransferer implements Listener {
     }
 
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
-    public void onBlockDropItem(BlockDropItemEvent event) {
+    public void onBlockBreak(BlockBreakEvent event) {
         // anti grief plugins should have been able to cancel the event by now
-        if (event.getBlockState() instanceof Container) {
-            Container state = (Container) event.getBlockState();
-            TransferScheme scheme = TransferScheme.ofHolder(state);
-            if (scheme.isNonNormal()) {
+        if (event.isDropItems()) {
+            BlockState state = event.getBlock().getState();
+            if (state instanceof Container) {
+                TransferScheme scheme = TransferScheme.ofHolder(state);
+                if (scheme.isNonNormal()) {
 
-                Item drop = null;
-                for (Item entity : event.getItems()) {
-                    ItemStack item = entity.getItemStack();
-                    if (item.getType() == state.getType()) {
-                        if (!state.getSnapshotInventory().contains(item)) {
-                            drop = entity;
-                            break;
-                        }
-                    }
-                }
-                if (drop != null) {
-                    // all these assumptions can be made since item & state types are equal
-                    ItemStack item = drop.getItemStack();
-                    BlockStateMeta meta = Objects.requireNonNull((BlockStateMeta) item.getItemMeta());
-                    Container dropState = (Container) meta.getBlockState();
-                    scheme.applyTo(dropState);
-
-                    meta.setBlockState(dropState);
-                    item.setItemMeta(meta);
-                }
-                else {
                     Location dest = state.getLocation().add(0.5, 0.5, 0.5);
                     for (TransferPolicy policy : scheme.getPolicies()) {
                         if (!policy.getToken().isAir()) {
                             state.getWorld().dropItemNaturally(dest, new ItemStack(policy.getToken()));
                         }
-                    }
-                }
-            }
-        }
-    }
-
-    @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
-    public void onBlockPlace(BlockPlaceEvent event) {
-        BlockState placed = event.getBlockPlaced().getState();
-        if (placed instanceof PersistentDataHolder) {
-            PersistentDataContainer placedPdc = ((PersistentDataHolder) placed).getPersistentDataContainer();
-            ItemMeta meta = event.getItemInHand().getItemMeta();
-            if (meta instanceof BlockStateMeta) {
-                BlockState held = ((BlockStateMeta) meta).getBlockState();
-                if (held instanceof PersistentDataHolder) {
-                    PersistentDataContainer heldPdc = ((PersistentDataHolder) held).getPersistentDataContainer();
-                    for (NamespacedKey key : heldPdc.getKeys()) {
-                        // TODO HOW????
                     }
                 }
             }
@@ -166,7 +122,7 @@ public class ItemTransferer implements Listener {
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
     public void onInventoryPickupItem(InventoryPickupItemEvent event) {
         final Inventory dest = event.getInventory();
-        final TransferScheme scheme = TransferScheme.ofInvHolder(dest.getHolder());
+        final TransferScheme scheme = TransferScheme.ofHolder(dest.getHolder());
 
         boolean takeover = scheme.isNonNormal();
 
